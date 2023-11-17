@@ -61,7 +61,7 @@ class AerialRobotWithObstacles(BaseTask):
     
         num_actors = self.num_obstacles + 1 # Number of obstacles in the environment + one robot
         bodies_per_env = self.env_asset_manager.get_env_link_count() + self.robot_num_bodies # Number of links in the environment + robot
-        self.seVAE = VAENetworkInterface(batch_size=self.num_envs)
+        self.seVAE = VAENetworkInterface()
 
         self.vec_root_tensor = gymtorch.wrap_tensor(
             self.root_tensor).view(self.num_envs, num_actors, 13)
@@ -434,7 +434,7 @@ class AerialRobotWithObstacles(BaseTask):
     
     # Forward pass of the seVAE encoder
     def _compute_latent_representation(self):
-        self.latents, _, _ = self.seVAE.forward(self.full_camera_array)
+        self.latents = self.seVAE.forward_torch(self.full_camera_array)
 
     def _compute_travel_distances(self):
         self.travel_distances += (self.obs_buf[..., 131:134] - self.root_positions).pow(2).sqrt().sum(1)
@@ -488,11 +488,8 @@ def compute_quadcopter_reward(root_positions, goal_position, root_quats, root_an
     R_GOAL = 5.0
     R_TO = 0.0
     R_MB = -4.0
-    R_DIST = -0.005
-
-    R_SPIN = -0.005
-    R_UP = -0.005
-
+    R_DIST = -0.1
+    
     # distance to target
     target_dist = (root_positions - goal_position).pow(2).sqrt().sum(1)
     pos_reward = 2.0 / (1.0 + target_dist * target_dist)
