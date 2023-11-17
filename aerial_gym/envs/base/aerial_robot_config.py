@@ -13,11 +13,11 @@ class AerialRobotCfg(BaseConfig):
     seed = 1
     class env:
         num_envs = 65536
-        num_observations = 13
+        num_observations = 144
         get_privileged_obs = False # if True the states of all entitites in the environment will be returned as privileged observations, otherwise None will be returned
         num_actions = 4
         env_spacing = 1
-        episode_length_s = 8 # episode length in seconds
+        episode_length_s = 5 # episode length in seconds
         num_control_steps_per_env_step = 1 # number of physics steps per env step
 
     class control:

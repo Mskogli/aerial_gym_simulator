@@ -17,14 +17,15 @@ WALL_SEMANTIC_ID = 8
 class AerialRobotWithObstaclesCfg(BaseConfig):
     seed = 1
     class env:
-        num_envs = 64
-        num_observations = 13
+        num_envs = 128
+        num_observations = 144
+        observation_space = 144
         get_privileged_obs = True # if True the states of all entitites in the environment will be returned as privileged observations, otherwise None will be returned
         num_actions = 4
         env_spacing = 5.0  # not used with heightfields/trimeshes
-        episode_length_s = 10 # episode length in seconds
+        episode_length_s = 5 # episode length in seconds
         num_control_steps_per_env_step = 10 # number of control & physics steps between camera renders
-        enable_onboard_cameras = False # enable onboard cameras
+        enable_onboard_cameras = True # enable onboard cameras
         reset_on_collision = True # reset environment when contact force on quadrotor is above a threshold
         create_ground_plane = True # create a ground plane
 
@@ -98,7 +99,8 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         collision_mask = 1
 
         collapse_fixed_joints = True
-        fix_base_link = True
+        fix_base_link = False
+        disable_gravity = True
         links_per_asset = 1
         set_whole_body_semantic_mask = False
         set_semantic_mask_per_link = False
@@ -108,7 +110,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
 
 
     class thin_asset_params(asset_state_params):
-        num_assets = 10
+        num_assets = 5
 
         collision_mask = 1 # objects with the same collision mask will not collide
 
@@ -123,6 +125,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         specified_euler_angle = [-1000.0, -1000.0, -1000.0] # if > -900, use this value instead of randomizing
                 
         collapse_fixed_joints = True
+        fix_base_link = True
         links_per_asset = 1
         set_whole_body_semantic_mask = True
         semantic_id = THIN_SEMANTIC_ID
@@ -132,7 +135,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
       
 
     class tree_asset_params(asset_state_params):
-        num_assets = 10
+        num_assets = 1
 
         collision_mask = 1 # objects with the same collision mask will not collide
 
@@ -147,6 +150,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         specified_euler_angle = [-1000.0, -1000.0, -1000.0] # if > -900, use this value instead of randomizing
 
         collapse_fixed_joints = True
+        fix_base_link = True
         links_per_asset = 1
         set_whole_body_semantic_mask = False
         set_semantic_mask_per_link = True
@@ -155,12 +159,16 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [70,200,100]
 
     class object_asset_params(asset_state_params):
-        num_assets = 50
-        
+        collision_mask = 0
+        num_assets = 1
+
+        disable_gravity = True
+        fix_base_link = False
+
         max_position_ratio = [0.95, 0.95, 0.95] # min position as a ratio of the bounds
         min_position_ratio = [0.05, 0.05, 0.05] # max position as a ratio of the bounds
 
-        specified_position = [-1000.0, -1000.0, -1000.0] # if > -900, use this value instead of randomizing the ratios
+        specified_position = [2.5, -2.5, 20] # if > -900, use this value instead of randomizing the ratios
 
         min_euler_angles = [0, -np.pi/6, -np.pi] # min euler angles
         max_euler_angles = [0, np.pi/6, np.pi] # max euler angles
@@ -307,9 +315,9 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         folder_path = f"{AERIAL_GYM_ROOT_DIR}/resources/models/environment_assets"
         
         include_asset_type = {
-            "thin": True,
-            "trees": False,
-            "objects": True
+            "thin": False,
+            "trees": False ,
+            "objects": True 
             }
             
         include_env_bound_type = {
