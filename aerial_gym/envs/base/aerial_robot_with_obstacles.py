@@ -61,7 +61,7 @@ class AerialRobotWithObstacles(BaseTask):
     
         num_actors = self.num_obstacles + 1 # Number of obstacles in the environment + one robot
         bodies_per_env = self.env_asset_manager.get_env_link_count() + self.robot_num_bodies # Number of links in the environment + robot
-        self.seVAE = VAENetworkInterface(batch_size=self.num_envs)
+        self.seVAE = VAENetworkInterface()
 
         self.vec_root_tensor = gymtorch.wrap_tensor(
             self.root_tensor).view(self.num_envs, num_actors, 13)
@@ -348,9 +348,7 @@ class AerialRobotWithObstacles(BaseTask):
         goal_pos_rand_sample = torch.rand((num_resets, 3), device=self.device)
         self.goal_positions[env_ids] = (self.env_upper_bound[env_ids] - self.env_lower_bound[env_ids] -
                            0.50)*goal_pos_rand_sample + (self.env_lower_bound[env_ids]+ 0.25)
-        
-        self.goal_positions[env_ids] = torch.tensor([0, 0, 2.5], device = self.device, dtype=torch.float32)
-  
+          
         self.travel_distances[env_ids] = 0 
 
         # set drone positions that are sampled within environment bounds
@@ -434,13 +432,13 @@ class AerialRobotWithObstacles(BaseTask):
     
     # Forward pass of the seVAE encoder
     def _compute_latent_representation(self):
-        self.latents, _, _ = self.seVAE.forward(self.full_camera_array)
+        self.latents = self.seVAE.forward_torch(self.full_camera_array).clone().to(self.device)
 
     def _compute_travel_distances(self):
         self.travel_distances += (self.obs_buf[..., 131:134] - self.root_positions).pow(2).sqrt().sum(1)
 
     def compute_observations(self):
-        self.obs_buf[..., :128] = torch.tensor(self.latents, device=self.device, dtype=torch.float32)
+        self.obs_buf[..., :128] = self.latents
         self.obs_buf[..., 128:131] = self.goal_positions
         self.obs_buf[..., 131:134] = self.root_positions
         self.obs_buf[..., 134:138] = self.root_quats
@@ -484,14 +482,16 @@ def quat_axis(q, axis=0):
 def compute_quadcopter_reward(root_positions, goal_position, root_quats, root_angvels, reset_buf, progress_buf, collisions, distances, max_episode_length):
     # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, float) -> Tuple[Tensor, Tensor]
 
-    R_OBST = -3.0
-    R_GOAL = 5.0
+    R_OBST = -2.0
+    R_GOAL = 20000.0
     R_TO = 0.0
-    R_MB = -4.0
-    R_DIST = -0.005
 
-    R_SPIN = -0.005
-    R_UP = -0.005
+    R_DIST = -0.01
+    R_MB = -0.5
+
+    alpha_tiltage = -0.01
+    alpha_spinnage = -0.01
+    alpha_pos = 0.001
 
     # distance to target
     target_dist = (root_positions - goal_position).pow(2).sqrt().sum(1)
@@ -504,15 +504,15 @@ def compute_quadcopter_reward(root_positions, goal_position, root_quats, root_an
     # spinning
     spinnage = torch.abs(root_angvels[..., 2])
 
-    up_reward = 1.0 / (1.0 + tiltage * tiltage)
+    up_reward = tiltage*tiltage
 
     # spinning
     spinnage = torch.abs(root_angvels[..., 2])
-    spinnage_reward = 1.0 / (1.0 + spinnage * spinnage)
+    spinnage_reward = spinnage*spinnage
 
     # combined reward
     # uprigness and spinning only matter when close to the target
-    reward = pos_reward + pos_reward * (up_reward + spinnage_reward)
+    reward = alpha_pos*pos_reward + alpha_tiltage*up_reward + alpha_spinnage*spinnage_reward
 
     # resets due to misbehavior
     ones = torch.ones_like(reset_buf)
@@ -521,12 +521,11 @@ def compute_quadcopter_reward(root_positions, goal_position, root_quats, root_an
     resets_timeouts = torch.where(progress_buf >= max_episode_length - 1, ones, die)
     resets_misbehaviour = torch.where(torch.norm(root_positions, dim=1) > 20, ones, die)
     resets_collisions = torch.where(collisions > 0, ones, die)
-    resets_goal = torch.where(target_dist < 0.8, ones, die)
+    resets_goal = torch.where(target_dist < 1.0, ones, die)
 
-    #reset = resets_timeouts + resets_misbehaviour + resets_collisions + resets_goal
-    reset = resets_timeouts
+    reset = resets_timeouts + resets_misbehaviour + resets_collisions + resets_goal
     
     # terminal rewards incurred at the end of the episode
-    reward = reward + R_OBST*resets_collisions + R_TO*resets_timeouts + R_MB*resets_misbehaviour + torch.mul(R_DIST*distances, reset)
+    reward = reward + R_OBST*resets_collisions + R_TO*resets_timeouts + torch.mul(R_DIST*distances, reset) + R_GOAL*resets_goal + R_MB*resets_misbehaviour
 
     return reward, reset

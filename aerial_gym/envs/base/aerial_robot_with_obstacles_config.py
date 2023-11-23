@@ -99,8 +99,8 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         collision_mask = 1
 
         collapse_fixed_joints = True
-        fix_base_link = False
-        disable_gravity = True
+        fix_base_link = True
+        disable_gravity = False
         links_per_asset = 1
         set_whole_body_semantic_mask = False
         set_semantic_mask_per_link = False
@@ -159,16 +159,14 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [70,200,100]
 
     class object_asset_params(asset_state_params):
-        collision_mask = 0
-        num_assets = 1
+        collision_mask = 1
+        num_assets = 15
 
-        disable_gravity = True
-        fix_base_link = False
 
         max_position_ratio = [0.95, 0.95, 0.95] # min position as a ratio of the bounds
         min_position_ratio = [0.05, 0.05, 0.05] # max position as a ratio of the bounds
 
-        specified_position = [2.5, -2.5, 20] # if > -900, use this value instead of randomizing the ratios
+        specified_position = [-1000.0, -1000.0, -1000.0] # if > -900, use this value instead of randomizing the ratios
 
         min_euler_angles = [0, -np.pi/6, -np.pi] # min euler angles
         max_euler_angles = [0, np.pi/6, np.pi] # max euler angles
