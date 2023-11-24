@@ -61,7 +61,7 @@ class AerialRobotWithObstacles(BaseTask):
     
         num_actors = self.num_obstacles + 1 # Number of obstacles in the environment + one robot
         bodies_per_env = self.env_asset_manager.get_env_link_count() + self.robot_num_bodies # Number of links in the environment + robot
-        self.seVAE = VAENetworkInterface()
+        self.seVAE = VAENetworkInterface(device=self.sim_device)
 
         self.vec_root_tensor = gymtorch.wrap_tensor(
             self.root_tensor).view(self.num_envs, num_actors, 13)
@@ -309,6 +309,7 @@ class AerialRobotWithObstacles(BaseTask):
 
         self.time_out_buf = self.progress_buf > self.max_episode_length
         self.extras["time_outs"] = self.time_out_buf
+        self.extras["actions"] = actions  
         return self.obs_buf, self.privileged_obs_buf, self.rew_buf, self.reset_buf, self.extras
 
     def reset_idx(self, env_ids):
@@ -411,7 +412,7 @@ class AerialRobotWithObstacles(BaseTask):
         ones = torch.ones((self.num_envs), device=self.device)
         zeros = torch.zeros((self.num_envs), device=self.device)
         self.collisions[:] = 0
-        self.collisions = torch.where(torch.norm(self.contact_forces, dim=1) > 0.1, ones, zeros)
+        self.collisions = torch.where(torch.norm(self.contact_forces, dim=1) > 0.01, ones, zeros)
 
 
     def dump_images(self):
@@ -451,6 +452,7 @@ class AerialRobotWithObstacles(BaseTask):
             self.root_positions,
             self.goal_positions,
             self.root_quats,
+            self.root_linvels,
             self.root_angvels,
             self.reset_buf, self.progress_buf, self.collisions, self.travel_distances, self.max_episode_length
         )
@@ -479,40 +481,42 @@ def quat_axis(q, axis=0):
     return quat_rotate(q, basis_vec)
 
 @torch.jit.script
-def compute_quadcopter_reward(root_positions, goal_position, root_quats, root_angvels, reset_buf, progress_buf, collisions, distances, max_episode_length):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, float) -> Tuple[Tensor, Tensor]
+def compute_quadcopter_reward(root_positions, goal_position, root_quats, root_linvels, root_angvels, reset_buf, progress_buf, collisions, distances, max_episode_length):
+    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, float) -> Tuple[Tensor, Tensor]
 
-    R_OBST = -2.0
-    R_GOAL = 20000.0
+    R_OBST = -30.0
+    R_GOAL = 10
     R_TO = 0.0
+    R_DIST = -0.5
+    R_MB = -30
 
-    R_DIST = -0.01
-    R_MB = -0.5
-
-    alpha_tiltage = -0.01
-    alpha_spinnage = -0.01
-    alpha_pos = 0.001
+    alpha_tiltage = -0.3
+    alpha_spinnage = -0.3
+    alpha_pos = 1.0
+    alpha_vels = -0.1
 
     # distance to target
     target_dist = (root_positions - goal_position).pow(2).sqrt().sum(1)
-    pos_reward = 2.0 / (1.0 + target_dist * target_dist)
+    pos_reward = 1.0 / (1.0 + target_dist * target_dist)
 
     # uprightness
     ups = quat_axis(root_quats, 2)
     tiltage = torch.abs(1 - ups[..., 2])
 
     # spinning
-    spinnage = torch.abs(root_angvels[..., 2])
-
     up_reward = tiltage*tiltage
 
     # spinning
     spinnage = torch.abs(root_angvels[..., 2])
     spinnage_reward = spinnage*spinnage
 
+    vel_reward = torch.abs(root_linvels[..., 2]).pow(2)
+
+    tilt_spin_scaling = torch.where(pos_reward > 1.0, pos_reward, torch.ones_like(pos_reward))
+
     # combined reward
     # uprigness and spinning only matter when close to the target
-    reward = alpha_pos*pos_reward + alpha_tiltage*up_reward + alpha_spinnage*spinnage_reward
+    reward = alpha_pos*pos_reward + tilt_spin_scaling*(alpha_tiltage*up_reward + alpha_spinnage*spinnage_reward) + alpha_vels*vel_reward
 
     # resets due to misbehavior
     ones = torch.ones_like(reset_buf)
