@@ -2,14 +2,11 @@
 <robot name="quadrotor">
   <link name="base_link">
     <visual>
-      <origin xyz="0 0 0.0"/>
-      <geometry>
-        <cylinder radius="0.2" length="0.025"/>
-      </geometry>
-      <material name="White">
-        <color rgba="1 1 1 1.0"/>
-      </material>
-    </visual>
+    <origin xyz="0 0 0"/>
+    <geometry>
+      <mesh filename="package://skydio_2_1000_poly.obj" scale="0.002 0.002 0.002"/>
+    </geometry>
+  </visual>
     <collision>
       <origin xyz="0 0 0"/>
       <geometry>
@@ -22,60 +19,24 @@
     </inertial>
   </link>
   <link name="front_left_prop">
-    <visual>
-      <origin xyz="0 0 0"/>
-      <geometry>
-        <cylinder radius="0.05" length="0.07"/>
-      </geometry>
-      <material name="Orange">
-        <color rgba="1 0.423 0.03921568627 1.0"/>
-      </material>
-    </visual>
     <inertial>
       <mass value="0.01"/>
       <inertia ixx="0.000001" ixy="0.0" ixz="0.0" iyy="0.000001" iyz="0.0" izz="0.000001"/>
     </inertial>
   </link>
   <link name="front_right_prop">
-    <visual>
-      <origin xyz="0 0 0"/>
-      <geometry>
-        <cylinder radius="0.05" length="0.07"/>
-      </geometry>
-      <material name="Orange">
-        <color rgba="1.0 0.423 0.03921568627 1.0"/>
-      </material>
-    </visual>
     <inertial>
       <mass value="0.01"/>
       <inertia ixx="0.000001" ixy="0.0" ixz="0.0" iyy="0.000001" iyz="0.0" izz="0.000001"/>
     </inertial>
   </link>
   <link name="back_left_prop">
-    <visual>
-      <origin xyz="0 0 0"/>
-      <geometry>
-        <cylinder radius="0.05" length="0.07"/>
-      </geometry>
-      <material name="Blue">
-        <color rgba="0 0 1 1.0"/>
-      </material>
-    </visual>
     <inertial>
       <mass value="0.01"/>
       <inertia ixx="0.000001" ixy="0.0" ixz="0.0" iyy="0.000001" iyz="0.0" izz="0.000001"/>
     </inertial>
   </link>
   <link name="back_right_prop">
-    <visual>
-      <origin xyz="0 0 0"/>
-      <geometry>
-        <cylinder radius="0.05" length="0.07"/>
-      </geometry>
-      <material name="Blue">
-        <color rgba="0 0 1 1.0"/>
-      </material>
-    </visual>
     <inertial>
       <mass value="0.01"/>
       <inertia ixx="0.000001" ixy="0.0" ixz="0.0" iyy="0.000001" iyz="0.0" izz="0.000001"/>
