@@ -39,7 +39,7 @@ class AssetManager:
         self.device = device
         self.asset_config = self.cfg.asset_config
         self.assets = []
-        self.dynamic_asset_ids = []
+        self.dynamic_asset_ids = None
         self.dynamic_asset_centroids = None
         self.asset_pose_tensor = None
         self.asset_const_inv_mask_tensor = None
@@ -175,6 +175,7 @@ class AssetManager:
 
     def prepare_assets_for_simulation(self, gym, sim):
         asset_list = []
+        dynamic_asset_ids = []
         for asset_id, (asset_key, include_asset) in enumerate(
             self.asset_config.include_asset_type.items()
         ):
@@ -204,6 +205,7 @@ class AssetManager:
 
             num_dynamic_assets = asset_class.num_dynamic
             prev_registered_assets = len(asset_list)
+
             for file_num, file_name in enumerate(file_list):
                 asset_dict = {
                     "asset_folder_path": folder_path,
@@ -221,15 +223,23 @@ class AssetManager:
                     asset_dict["asset_options"].fix_base_link = False
                     asset_dict["asset_options"].disable_gravity = False
 
-                    dynamic_asset_id = (
-                        file_num if not asset_id else file_num + prev_registered_assets
-                    )
-                    self.dynamic_asset_ids.append(dynamic_asset_id)
+                    if self.dynamic_asset_ids is None:
+                        dynamic_asset_id = (
+                            file_num
+                            if not asset_id
+                            else file_num + prev_registered_assets
+                        )
+                        dynamic_asset_ids.append(dynamic_asset_id)
 
                 asset_list.append(asset_dict)
 
+        self.dynamic_asset_ids = (
+            dynamic_asset_ids
+            if self.dynamic_asset_ids is None
+            else self.dynamic_asset_ids
+        )
+        print("Dyn asset ids", self.dynamic_asset_ids)
         self.num_dynamic_assets = len(self.dynamic_asset_ids)
-        print("dyn assset ids", self.dynamic_asset_ids)
 
         # adding environment bounds to be loaded as assets
         for (
@@ -343,9 +353,9 @@ class AssetManager:
         setpoints = torch.cat(
             (circle_setpoints, hline_setpoints, vline_setpoints), dim=1
         )
-        print(setpoints)
 
         dyn_asset_states = states[:, self.dynamic_asset_ids, :]
+        print(setpoints.size(), dyn_asset_states.size(), states.size())
         position_errors = setpoints - dyn_asset_states[:, self.dynamic_asset_ids, 0:3]
         velocity_errors = -dyn_asset_states[:, :, 7:10]
         rotation_matrices = p3d_transforms.quaternion_to_matrix(
@@ -380,6 +390,7 @@ class AssetManager:
     def _step_dyn_asset_vertical_line_setpoint(self) -> torch.tensor:
         line_z = torch.sin(self.t)
         vertical_line_asset_centroids = self.dynamic_asset_centroids[:, 8:12, :]
+
         return (
             torch.tensor([0, 0, line_z], device=self.device).view(-1, 1, 3)
             + vertical_line_asset_centroids
