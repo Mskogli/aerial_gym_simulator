@@ -249,6 +249,7 @@ class AerialRobotWithObstacles(BaseTask):
                 )
                 torch_cam_tensor = gymtorch.wrap_tensor(camera_tensor)
                 self.camera_tensors.append(torch_cam_tensor)
+                print("Batman")
 
             env_asset_list = self.env_asset_manager.prepare_assets_for_simulation(
                 self.gym, self.sim
@@ -367,6 +368,7 @@ class AerialRobotWithObstacles(BaseTask):
 
         self.render(sync_frame_time=False)
         if self.enable_onboard_cameras:
+            print("Batman")
             self.render_cameras()
 
         self.progress_buf += 1
@@ -515,6 +517,7 @@ class AerialRobotWithObstacles(BaseTask):
     def dump_images(self):
         for env_id in range(self.num_envs):
             # the depth values are in -ve z axis, so we need to flip it to positive
+            print(self.full_camera_array.size())
             self.full_camera_array[env_id] = -self.camera_tensors[env_id]
 
     def compute_observations(self):
