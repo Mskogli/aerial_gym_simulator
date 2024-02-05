@@ -32,6 +32,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         reset_on_collision = True  # reset environment when contact force on quadrotor is above a threshold
         create_ground_plane = True  # create a ground plane
 
+
     class viewer:
         ref_env = 0
         pos = [-5, -5, 4]  # [m]
@@ -120,6 +121,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
 
         collapse_fixed_joints = True
         fix_base_link = True
+        disable_gravity = False
         links_per_asset = 1
         set_whole_body_semantic_mask = False
         set_semantic_mask_per_link = False
@@ -130,6 +132,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
     class thin_asset_params(asset_state_params):
         num_assets = 10
         num_dynamic = 2
+
 
         collision_mask = 1  # objects with the same collision mask will not collide
 
@@ -151,6 +154,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         ]  # if > -900, use this value instead of randomizing
 
         collapse_fixed_joints = True
+        fix_base_link = True
         links_per_asset = 1
         set_whole_body_semantic_mask = True
         semantic_id = THIN_SEMANTIC_ID
@@ -161,6 +165,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
     class tree_asset_params(asset_state_params):
         num_assets = 1
         num_dynamic = 1
+
 
         collision_mask = 1  # objects with the same collision mask will not collide
 
@@ -183,6 +188,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         ]  # if > -900, use this value instead of randomizing
 
         collapse_fixed_joints = True
+        fix_base_link = True
         links_per_asset = 1
         set_whole_body_semantic_mask = False
         set_semantic_mask_per_link = True
@@ -397,6 +403,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         folder_path = f"{AERIAL_GYM_ROOT_DIR}/resources/models/environment_assets"
 
         include_asset_type = {"thin": False, "trees": False, "objects": True}
+
 
         include_env_bound_type = {
             "front_wall": False,

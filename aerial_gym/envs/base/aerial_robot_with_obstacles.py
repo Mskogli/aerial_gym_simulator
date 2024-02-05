@@ -10,6 +10,10 @@ import os
 import torch
 import sys
 
+from matplotlib import pyplot as plt
+import cv2 as cv
+
+from sevae.inference.scripts.VAENetworkInterface import VAENetworkInterface
 
 from aerial_gym import AERIAL_GYM_ROOT_DIR, AERIAL_GYM_ROOT_DIR
 
@@ -45,6 +49,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.physics_engine = physics_engine
         self.sim_device_id = sim_device
         self.headless = headless
+        self.saved_frame = False
 
         self.enable_onboard_cameras = self.cfg.env.enable_onboard_cameras
 
@@ -88,6 +93,9 @@ class AerialRobotWithObstacles(BaseTask):
 
         self.collisions = torch.zeros(self.num_envs, device=self.device)
 
+        self.goal_positions = torch.zeros(self.num_envs, 3,  device=self.device, dtype=torch.float32)
+        self.travel_distances = torch.zeros(self.num_envs, device=self.device, dtype=torch.float32)
+
         self.initial_root_states = self.root_states.clone()
         self.counter = 0
 
@@ -129,9 +137,11 @@ class AerialRobotWithObstacles(BaseTask):
         )
 
         if self.cfg.env.enable_onboard_cameras:
+
             self.full_camera_array = torch.zeros(
                 (self.num_envs, 270, 480), device=self.device
             )
+
 
         if self.viewer:
             cam_pos_x, cam_pos_y, cam_pos_z = (
@@ -335,7 +345,6 @@ class AerialRobotWithObstacles(BaseTask):
 
                 if color is None:
                     color = np.random.randint(low=50, high=200, size=3)
-
                 self.gym.set_rigid_body_color(
                     env_handle,
                     env_asset_handle,
@@ -374,6 +383,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.progress_buf += 1
 
         self.check_collisions()
+        self._compute_travel_distances()
         self.compute_observations()
         self.compute_reward()
 
@@ -381,12 +391,14 @@ class AerialRobotWithObstacles(BaseTask):
             ones = torch.ones_like(self.reset_buf)
             self.reset_buf = torch.where(self.collisions > 0, ones, self.reset_buf)
 
+        self.extras["resets"] = self.reset_buf # Record resets in order to facilitate data logging
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
             self.reset_idx(reset_env_ids)
 
         self.time_out_buf = self.progress_buf > self.max_episode_length
         self.extras["time_outs"] = self.time_out_buf
+
         return (
             self.obs_buf,
             self.privileged_obs_buf,
@@ -395,12 +407,14 @@ class AerialRobotWithObstacles(BaseTask):
             self.extras,
         )
 
+
     def reset_idx(self, env_ids):
         num_resets = len(env_ids)
         if 0 in env_ids:
             print("\n\n\n RESETTING ENV 0 \n\n\n")
 
         self.env_asset_manager.randomize_pose()
+
 
         self.env_asset_root_states[env_ids, :, 0:3] = (
             self.env_asset_manager.asset_pose_tensor[env_ids, :, 0:3]
@@ -436,8 +450,11 @@ class AerialRobotWithObstacles(BaseTask):
             -1.0, 1.0, (num_resets, 3), self.device
         )
 
+
         self.root_states[env_ids, 3:6] = 0  # standard orientation, can be randomized
         self.root_states[env_ids, 6] = 1
+
+        self.compute_observations() # Reset the observation buffer
 
         self.gym.set_actor_root_state_tensor(self.sim, self.root_tensor)
         self.progress_buf[env_ids] = 0
@@ -499,43 +516,68 @@ class AerialRobotWithObstacles(BaseTask):
         self.gym.render_all_camera_sensors(self.sim)
         self.gym.start_access_image_tensors(self.sim)
         self.dump_images()
+        self._process_depth_images()
+        self._compute_latent_representation()
         self.gym.end_access_image_tensors(self.sim)
         return
 
-    def post_physics_step(self):
+    def post_physics_step(self): 
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_net_contact_force_tensor(self.sim)
 
     def check_collisions(self):
         ones = torch.ones((self.num_envs), device=self.device)
         zeros = torch.zeros((self.num_envs), device=self.device)
-        self.collisions[:] = 0
+        self.collisions[:]
         self.collisions = torch.where(
             torch.norm(self.contact_forces, dim=1) > 0.1, ones, zeros
         )
+
 
     def dump_images(self):
         for env_id in range(self.num_envs):
             # the depth values are in -ve z axis, so we need to flip it to positive
             print(self.full_camera_array.size())
             self.full_camera_array[env_id] = -self.camera_tensors[env_id]
+    
+    # Post process depth images before computing the latent representation
+    def _process_depth_images(self):
+        IMAGE_MAX_DEPTH = 10
+
+        self.full_camera_array[torch.isnan(self.full_camera_array)] = IMAGE_MAX_DEPTH
+        self.full_camera_array[self.full_camera_array > IMAGE_MAX_DEPTH] = IMAGE_MAX_DEPTH
+        self.full_camera_array[self.full_camera_array < 0.20] = -1.0
+        
+        self.full_camera_array = self.full_camera_array/IMAGE_MAX_DEPTH
+        self.full_camera_array[self.full_camera_array < 0.2/IMAGE_MAX_DEPTH] = -1.0
+    
+    # Forward pass of the seVAE encoder
+    def _compute_latent_representation(self):
+        self.latents = self.seVAE.forward_torch(self.full_camera_array).clone().to(self.device)
+
+    def _compute_travel_distances(self):
+        self.travel_distances += (self.obs_buf[..., 131:134] - self.root_positions).pow(2).sqrt().sum(1)
 
     def compute_observations(self):
-        self.obs_buf[..., :3] = self.root_positions
-        self.obs_buf[..., 3:7] = self.root_quats
-        self.obs_buf[..., 7:10] = self.root_linvels
-        self.obs_buf[..., 10:13] = self.root_angvels
+        self.obs_buf[..., :128] = self.latents
+        self.obs_buf[..., 128:131] = self.goal_positions
+        self.obs_buf[..., 131:134] = self.root_positions
+        self.obs_buf[..., 134:138] = self.root_quats
+        self.obs_buf[..., 138:141] = self.root_linvels
+        self.obs_buf[..., 141:144] = self.root_angvels
         return self.obs_buf
 
     def compute_reward(self):
         self.rew_buf[:], self.reset_buf[:] = compute_quadcopter_reward(
             self.root_positions,
+            self.goal_positions,
             self.root_quats,
             self.root_linvels,
             self.root_angvels,
             self.reset_buf,
             self.progress_buf,
             self.max_episode_length,
+
         )
 
 
@@ -567,6 +609,7 @@ def quat_axis(q, axis=0):
 
 
 @torch.jit.script
+
 def compute_quadcopter_reward(
     root_positions,
     root_quats,
@@ -578,9 +621,13 @@ def compute_quadcopter_reward(
 ):
     # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, float) -> Tuple[Tensor, Tensor]
 
-    ## The reward function set here is arbitrary and the user is encouraged to modify this as per their need to achieve collision avoidance.
+    alpha_tiltage = -0.3
+    alpha_spinnage = -0.3
+    alpha_pos = 1.0
+    alpha_vels = -0.1
 
     # distance to target
+
     target_dist = torch.sqrt(
         root_positions[..., 0] * root_positions[..., 0]
         + root_positions[..., 1] * root_positions[..., 1]
@@ -588,26 +635,39 @@ def compute_quadcopter_reward(
     )
     pos_reward = 2.0 / (1.0 + target_dist * target_dist)
 
+
     # uprightness
     ups = quat_axis(root_quats, 2)
     tiltage = torch.abs(1 - ups[..., 2])
-    up_reward = 1.0 / (1.0 + tiltage * tiltage)
+
+    # spinning
+    up_reward = tiltage*tiltage
 
     # spinning
     spinnage = torch.abs(root_angvels[..., 2])
-    spinnage_reward = 1.0 / (1.0 + spinnage * spinnage)
+    spinnage_reward = spinnage*spinnage
+
+    vel_reward = torch.abs(root_linvels[..., 2]).pow(2)
+
+    tilt_spin_scaling = torch.where(pos_reward > 1.0, pos_reward, torch.ones_like(pos_reward))
 
     # combined reward
     # uprigness and spinning only matter when close to the target
-    reward = pos_reward + pos_reward * (up_reward + spinnage_reward)
+    reward = alpha_pos*pos_reward + tilt_spin_scaling*(alpha_tiltage*up_reward + alpha_spinnage*spinnage_reward) + alpha_vels*vel_reward
 
     # resets due to misbehavior
     ones = torch.ones_like(reset_buf)
     die = torch.zeros_like(reset_buf)
-    # die = torch.where(target_dist > 10.0, ones, die)
 
-    # resets due to episode length
-    reset = torch.where(progress_buf >= max_episode_length - 1, ones, die)
-    reset = torch.where(torch.norm(root_positions, dim=1) > 20, ones, reset)
+    resets_timeouts = torch.where(progress_buf >= max_episode_length - 1, ones, die)
+    resets_misbehaviour = torch.where(torch.norm(root_positions, dim=1) > 20, ones, die)
+    resets_collisions = torch.where(collisions > 0, ones, die)
+    resets_goal = torch.where(target_dist < 1.0, ones, die)
+
+
+    reset = resets_timeouts + resets_misbehaviour + resets_collisions + resets_goal
+    
+    # terminal rewards incurred at the end of the episode
+    reward = reward + R_OBST*resets_collisions + R_TO*resets_timeouts + torch.mul(R_DIST*distances, reset) + R_GOAL*resets_goal + R_MB*resets_misbehaviour
 
     return reward, reset
