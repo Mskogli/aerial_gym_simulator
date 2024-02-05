@@ -344,7 +344,7 @@ class AssetManager:
         self, states: torch.tensor, counter: float
     ) -> Tuple[torch.tensor, ...]:  # 2 Tuple
 
-        self.t = torch.tensor([counter / 300.0], device=self.device)
+        self.t = torch.tensor([counter / 100.0], device=self.device)
 
         circle_setpoints = self._step_dyn_asset_circle_setpoint()
         hline_setpoints = self._step_dyn_asset_horizontal_line_setpoint()
