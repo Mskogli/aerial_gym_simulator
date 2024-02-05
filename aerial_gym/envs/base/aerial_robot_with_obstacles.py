@@ -20,7 +20,6 @@ from aerial_gym.envs.base.base_task import BaseTask
 from .aerial_robot_with_obstacles_config import AerialRobotWithObstaclesCfg
 
 from aerial_gym.envs.controllers.controller import Controller
-from aerial_gym.envs.controllers.dyn_asset_controller import DynamicAssetController
 
 from aerial_gym.utils.asset_manager import AssetManager
 
@@ -76,17 +75,6 @@ class AerialRobotWithObstacles(BaseTask):
         self.root_linvels = self.root_states[..., 7:10]
         self.root_angvels = self.root_states[..., 10:13]
 
-        # TODO: Implement this with the environment cfg
-        # self.num_obstacles = 2
-        # self.num_dynamic_obstacles = 1
-
-        # self.env_dynamic_asset_root_states = self.vec_root_tensor[
-        #    :, 1 : self.num_dynamic_obstacles + 1, :
-        # ]
-        # self.env_asset_root_states = self.vec_root_tensor[
-        #    :, self.num_dynamic_obstacles + 1 :, :
-        # ]
-
         self.env_asset_root_states = self.vec_root_tensor[:, 1:, :]
 
         self.privileged_obs_buf = None
@@ -117,7 +105,6 @@ class AerialRobotWithObstacles(BaseTask):
             device=self.device,
             requires_grad=False,
         )
-        print("Bodies PER ENV: ", bodies_per_env)
         self.forces = torch.zeros(
             (self.num_envs, bodies_per_env, 3),
             dtype=torch.float32,
@@ -132,7 +119,6 @@ class AerialRobotWithObstacles(BaseTask):
         )
 
         self.controller = Controller(self.cfg.control, self.device)
-        self.dynamic_asset_controller = DynamicAssetController(device=self.device)
 
         # Getting environment bounds
         self.env_lower_bound = torch.zeros(
@@ -267,6 +253,7 @@ class AerialRobotWithObstacles(BaseTask):
             env_asset_list = self.env_asset_manager.prepare_assets_for_simulation(
                 self.gym, self.sim
             )
+
             asset_counter = 0
 
             # have the segmentation counter be the max defined semantic id + 1. Use this to set the semantic mask of objects that are
@@ -422,21 +409,6 @@ class AerialRobotWithObstacles(BaseTask):
             euler_angles[..., 0], euler_angles[..., 1], euler_angles[..., 2]
         )
 
-        env_asset_vel_lower_bound = torch.tensor(
-            [-0.05, -0.05, -0.05], device=self.device, dtype=torch.float32
-        )
-        env_asset_vel_upper_bound = torch.tensor(
-            [0.05, 0.05, 0.05], device=self.device, dtype=torch.float32
-        )
-        asset_lin_vel_rand_sample = torch.rand((num_resets, 14, 3), device=self.device)
-        asset_rot_vel_rand_sample = torch.rand((num_resets, 14, 3), device=self.device)
-
-        # self.env_asset_root_states[env_ids, :, 7:10] = (
-        #    env_asset_vel_lower_bound - env_asset_vel_upper_bound
-        # ) * asset_lin_vel_rand_sample + env_asset_vel_lower_bound
-        # self.env_asset_root_states[env_ids, :, 10:13] = (
-        #    env_asset_vel_lower_bound - env_asset_vel_upper_bound
-        # ) * asset_rot_vel_rand_sample + env_asset_vel_lower_bound
         self.env_asset_root_states[env_ids, :, 7:13] = 0.0
 
         # get environment lower and upper bounds
@@ -500,16 +472,19 @@ class AerialRobotWithObstacles(BaseTask):
             self.forces < 0, torch.zeros_like(self.forces), self.forces
         )
 
-        dynamic_asset_setpoints = self.env_asset_manager.step_dynamic_obstacle_paths(
-            self.counter
+        dynamic_asset_forces, dynamic_asset_torques = (
+            self.env_asset_manager.compute_dyn_asset_forces(
+                self.env_asset_root_states, self.counter
+            )
         )
 
-        dynamic_asset_forces, dynamic_asset_torques = self.dynamic_asset_controller(
-            self.env_asset_root_states, dynamic_asset_setpoints
-        )
+        self.forces[:, 5:, :][
+            :, self.env_asset_manager.dynamic_asset_ids, :
+        ] = dynamic_asset_forces
 
-        self.forces[:, 5:, :] = dynamic_asset_forces
-        self.torques[:, 5:] = dynamic_asset_torques
+        self.torques[:, 5:][
+            :, self.env_asset_manager.dynamic_asset_ids
+        ] = dynamic_asset_torques
 
         self.gym.apply_rigid_body_force_tensors(
             self.sim,

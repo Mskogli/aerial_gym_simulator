@@ -16,7 +16,7 @@ WALL_SEMANTIC_ID = 8
 
 
 class AerialRobotWithObstaclesCfg(BaseConfig):
-    seed = 1
+    seed = 2
 
     class env:
         num_envs = 64
@@ -24,7 +24,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         get_privileged_obs = True  # if True the states of all entitites in the environmsent will be returned as privileged observations, otherwise None will be returned
         num_actions = 4
         env_spacing = 5.0  # not used with heightfields/trimeshes
-        episode_length_s = 1  # episode length in seconds
+        episode_length_s = 4  # episode length in seconds
         num_control_steps_per_env_step = (
             10  # number of control & physics steps between camera renders
         )
@@ -207,9 +207,9 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         max_euler_angles = [0, np.pi / 6, np.pi]  # max euler angles
 
         specified_euler_angle = [
-            0,
-            0,
-            0,
+            -1000.0,
+            -1000.0,
+            -1000.0,
         ]  # if > -900, use this value instead of randomizing
 
         links_per_asset = 1

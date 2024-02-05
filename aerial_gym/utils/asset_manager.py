@@ -9,6 +9,7 @@ import random
 
 from isaacgym import gymapi
 from isaacgym.torch_utils import quat_from_euler_xyz
+from typing import Tuple
 
 import torch
 import pytorch3d.transforms as p3d_transforms
@@ -85,6 +86,10 @@ class AssetManager:
             "bottom_wall": self.cfg.bottom_wall,
             "top_wall": self.cfg.top_wall,
         }
+
+        # Dynamic assets
+        self.Kp = 2.0
+        self.Kd = 1.5
 
         self.load_asset_tensors()
         self.randomize_pose()
@@ -223,6 +228,9 @@ class AssetManager:
 
                 asset_list.append(asset_dict)
 
+        self.num_dynamic_assets = len(self.dynamic_asset_ids)
+        print("dyn assset ids", self.dynamic_asset_ids)
+
         # adding environment bounds to be loaded as assets
         for (
             env_bound_key,
@@ -313,27 +321,66 @@ class AssetManager:
         self.dynamic_asset_centroids = self.asset_pose_tensor[
             :, self.dynamic_asset_ids, :3
         ]
+
         return
-
-    def step_dynamic_obstacle_paths(self, counter):
-        t = torch.tensor([counter / 100.0], device=self.device)
-
-        # Circle
-
-        circle_x = 3 * torch.sin(t)
-        circle_y = 3 * torch.cos(t)
-        circle_setpoints = (
-            torch.tensor(
-                [circle_x, circle_y, 0],
-                device=self.device,
-            ).repeat(1, 12, 1)
-            + self.dynamic_asset_centroids
-        ).repeat(1, 2, 1)
-
-        return circle_setpoints
 
     def get_env_link_count(self):
         return self.env_link_count
 
     def get_env_actor_count(self):
         return self.env_actor_count
+
+    def compute_dyn_asset_forces(
+        self, states: torch.tensor, counter: float
+    ) -> Tuple[torch.tensor, ...]:  # 2 Tuple
+
+        self.t = torch.tensor([counter / 300.0], device=self.device)
+
+        circle_setpoints = self._step_dyn_asset_circle_setpoint()
+        hline_setpoints = self._step_dyn_asset_horizontal_line_setpoint()
+        vline_setpoints = self._step_dyn_asset_vertical_line_setpoint()
+
+        setpoints = torch.cat(
+            (circle_setpoints, hline_setpoints, vline_setpoints), dim=1
+        )
+        print(setpoints)
+
+        dyn_asset_states = states[:, self.dynamic_asset_ids, :]
+        position_errors = setpoints - dyn_asset_states[:, self.dynamic_asset_ids, 0:3]
+        velocity_errors = -dyn_asset_states[:, :, 7:10]
+        rotation_matrices = p3d_transforms.quaternion_to_matrix(
+            dyn_asset_states[..., [6, 3, 4, 5]]
+        ).transpose(-2, -1)
+
+        forces = self.Kp * position_errors + self.Kd * velocity_errors
+        forces[:, :, -1] += 9.81
+
+        forces = torch.matmul(rotation_matrices, forces.unsqueeze(-1)).squeeze(-1)
+        torques = torch.ones_like(forces) * torch.sin(self.t) * 0.0
+        return (forces, torques)
+
+    def _step_dyn_asset_circle_setpoint(self) -> torch.tensor:
+        circle_x = torch.sin(self.t)
+        circle_y = torch.cos(self.t)
+
+        circle_asset_centroids = self.dynamic_asset_centroids[:, 0:4, :]
+        return (
+            torch.tensor([circle_x, circle_y, 0], device=self.device).view(-1, 1, 3)
+            + circle_asset_centroids
+        )
+
+    def _step_dyn_asset_horizontal_line_setpoint(self) -> torch.tensor:
+        line_x = torch.sin(self.t)
+        horizontal_line_asset_centroids = self.dynamic_asset_centroids[:, 4:8, :]
+        return (
+            torch.tensor([line_x, 0, 0], device=self.device).view(-1, 1, 3)
+            + horizontal_line_asset_centroids
+        )
+
+    def _step_dyn_asset_vertical_line_setpoint(self) -> torch.tensor:
+        line_z = torch.sin(self.t)
+        vertical_line_asset_centroids = self.dynamic_asset_centroids[:, 8:12, :]
+        return (
+            torch.tensor([0, 0, line_z], device=self.device).view(-1, 1, 3)
+            + vertical_line_asset_centroids
+        )
