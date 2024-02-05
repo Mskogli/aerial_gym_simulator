@@ -355,7 +355,6 @@ class AssetManager:
         )
 
         dyn_asset_states = states[:, self.dynamic_asset_ids, :]
-        print(setpoints.size(), dyn_asset_states.size(), states.size())
         position_errors = setpoints - dyn_asset_states[:, self.dynamic_asset_ids, 0:3]
         velocity_errors = -dyn_asset_states[:, :, 7:10]
         rotation_matrices = p3d_transforms.quaternion_to_matrix(

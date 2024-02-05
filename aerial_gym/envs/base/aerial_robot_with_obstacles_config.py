@@ -28,7 +28,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         num_control_steps_per_env_step = (
             10  # number of control & physics steps between camera renders
         )
-        enable_onboard_cameras = False  # enable onboard cameras
+        enable_onboard_cameras = True  # enable onboard cameras
         reset_on_collision = True  # reset environment when contact force on quadrotor is above a threshold
         create_ground_plane = True  # create a ground plane
 
