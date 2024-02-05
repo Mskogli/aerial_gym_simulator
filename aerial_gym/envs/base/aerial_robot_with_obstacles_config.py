@@ -399,31 +399,15 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         include_asset_type = {"thin": False, "trees": False, "objects": True}
 
         include_env_bound_type = {
-            "front_wall": True,
-            "left_wall": True,
+            "front_wall": False,
+            "left_wall": False,
             "top_wall": False,
-            "back_wall": True,
-            "right_wall": True,
+            "back_wall": False,
+            "right_wall": False,
             "bottom_wall": False,
         }
 
-        env_lower_bound_min = [
-            -10.0,
-            -10.0,
-            0.0,
-        ]  # lower bound for the environment space
-        env_lower_bound_max = [
-            -10.0,
-            -10.0,
-            0.0,
-        ]  # lower bound for the environment space
-        env_upper_bound_min = [
-            10.0,
-            10.0,
-            10.0,
-        ]  # upper bound for the environment space
-        env_upper_bound_max = [
-            10.0,
-            10.0,
-            10.0,
-        ]  # upper bound for the environment space
+        env_lower_bound_min = [-5.0, -5.0, 0.0]  # lower bound for the environment space
+        env_lower_bound_max = [-5.0, -5.0, 0.0]  # lower bound for the environment space
+        env_upper_bound_min = [5.0, 5.0, 5.0]  # upper bound for the environment space
+        env_upper_bound_max = [5.0, 5.0, 5.0]  # upper bound for the environment space
