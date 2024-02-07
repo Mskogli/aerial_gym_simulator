@@ -606,42 +606,32 @@ def compute_quadcopter_reward(
 ):
     # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, float, Tensor) -> Tuple[Tensor, Tensor]
 
-    R_GOAL = 20
-    R_OBST = -40
+    R_GOAL = 100
+    R_OBST = -100
     R_MB = -40
     R_TO = 0
 
-    alpha_tiltage = -0.3
-    alpha_spinnage = -0.3
+    alpha_tiltage = 0.0
+    alpha_spinnage = 0.0
     alpha_pos = 1.0
-    alpha_vels = -0.3
+    alpha_vels = 0.0
 
-    # distance to target
-
-    target_dist = torch.sqrt(
-        root_positions[..., 0] * root_positions[..., 0]
-        + root_positions[..., 1] * root_positions[..., 1]
-        + (root_positions[..., 2]) * (root_positions[..., 2])
-    )
+    target_dist = torch.norm((root_positions - goal_positions), dim=-1)
     pos_reward = 2.0 / (1.0 + target_dist * target_dist)
 
     # uprightness
     ups = quat_axis(root_quats, 2)
-    tiltage = torch.abs(1 - ups[..., 2])
+    tiltage = torch.norm((1 - ups[..., 2]), dim=-1)
 
     # spinning
-    up_reward = tiltage
+    up_reward = 1 / (1 + tiltage)
 
     # spinning
-    spinnage = torch.abs(root_angvels[..., 2])
-    spinnage_reward = spinnage
+    spinnage = torch.norm(root_angvels[..., 2], dim=-1)
+    spinnage_reward = 1.0 / (1.0 + spinnage)
 
-    vel = torch.abs(root_linvels[..., 2]).pow(2)
-    vel_reward = vel
-
-    tilt_spin_scaling = torch.where(
-        pos_reward > 1.0, pos_reward, torch.ones_like(pos_reward)
-    )
+    vel = torch.norm(root_linvels[..., :], dim=-1)
+    vel_reward = 1.0 / (1.0 + vel)
 
     # combined reward
     # uprigness and spinning only matter when close to the target
@@ -658,7 +648,7 @@ def compute_quadcopter_reward(
     resets_timeouts = torch.where(progress_buf >= max_episode_length - 1, ones, die)
     resets_misbehaviour = torch.where(torch.norm(root_positions, dim=1) > 20, ones, die)
     resets_collisions = torch.where(collisions > 0, ones, die)
-    resets_goal = torch.where(target_dist < 1.0, ones, die)
+    resets_goal = torch.where(target_dist < 0.5, ones, die)
 
     reset = resets_timeouts + resets_misbehaviour + resets_collisions + resets_goal
 
