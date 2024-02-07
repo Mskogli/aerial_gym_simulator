@@ -514,17 +514,17 @@ class AerialRobotWithObstacles(BaseTask):
             # the depth values are in -ve z axis, so we need to flip it to positive
             self.full_camera_array[env_id] = -self.camera_tensors[env_id]
 
-            np_image = self.full_camera_array[0].cpu().numpy()
+            # np_image = self.full_camera_array[0].cpu().numpy()
 
-            IMAGE_MAX_DEPTH = 10
-            np_image[np_image > IMAGE_MAX_DEPTH] = IMAGE_MAX_DEPTH
-            np_image[np_image < 0.20] = -1.0
+            # IMAGE_MAX_DEPTH = 10
+            # np_image[np_image > IMAGE_MAX_DEPTH] = IMAGE_MAX_DEPTH
+            # np_image[np_image < 0.20] = -1.0
 
-            np_image = np_image / IMAGE_MAX_DEPTH
-            np_image[np_image < 0.2 / IMAGE_MAX_DEPTH] = -1.0
+            # np_image = np_image / IMAGE_MAX_DEPTH
+            # np_image[np_image < 0.2 / IMAGE_MAX_DEPTH] = -1.0
 
-            plt.imshow(np_image, cmap="gray")
-            plt.show()
+            # plt.imshow(np_image, cmap="gray")
+            # plt.show()
 
     def compute_observations(self):
         self.obs_buf[..., :3] = self.root_positions

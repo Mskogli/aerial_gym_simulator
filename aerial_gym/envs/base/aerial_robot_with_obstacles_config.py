@@ -399,11 +399,11 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         include_asset_type = {"thin": False, "trees": False, "objects": True}
 
         include_env_bound_type = {
-            "front_wall": False,
-            "left_wall": False,
+            "front_wall": True,
+            "left_wall": True,
             "top_wall": False,
-            "back_wall": False,
-            "right_wall": False,
+            "back_wall": True,
+            "right_wall": True,
             "bottom_wall": False,
         }
 
