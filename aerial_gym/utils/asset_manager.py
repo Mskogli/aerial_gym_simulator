@@ -88,8 +88,8 @@ class AssetManager:
         }
 
         # Dynamic assets
-        self.Kp = 2.0
-        self.Kd = 1.5
+        self.Kp = 2000
+        self.Kd = 45
 
         self.load_asset_tensors()
         self.randomize_pose()
@@ -203,9 +203,8 @@ class AssetManager:
                 folder_path, asset_class.num_assets
             )
 
-            num_dynamic_assets = asset_class.num_dynamic
+            num_dynamic_assets = asset_class.num_dynamic_assets
             prev_registered_assets = len(asset_list)
-
             for file_num, file_name in enumerate(file_list):
                 asset_dict = {
                     "asset_folder_path": folder_path,
@@ -221,7 +220,6 @@ class AssetManager:
 
                 if num_dynamic_assets and file_num < num_dynamic_assets:
                     asset_dict["asset_options"].fix_base_link = False
-                    asset_dict["asset_options"].disable_gravity = False
 
                     if self.dynamic_asset_ids is None:
                         dynamic_asset_id = (
@@ -328,11 +326,17 @@ class AssetManager:
             self.asset_pose_tensor,
         )
 
-        self.dynamic_asset_centroids = self.asset_pose_tensor[
-            :, self.dynamic_asset_ids, :3
-        ]
+        if self.dynamic_asset_ids is not None:
+            dynamic_asset_pose_tensor = self.asset_pose_tensor[
+                :, self.dynamic_asset_ids, :
+            ]
 
-        return
+            if self.dynamic_asset_centroids is not None:
+                self.dynamic_asset_centroids[reset_envs, :] = dynamic_asset_pose_tensor[
+                    reset_envs, :, :3
+                ]
+            else:
+                self.dynamic_asset_centroids = dynamic_asset_pose_tensor[:, :, :3]
 
     def get_env_link_count(self):
         return self.env_link_count
@@ -343,36 +347,55 @@ class AssetManager:
     def compute_dyn_asset_forces(
         self, states: torch.tensor, counter: float
     ) -> Tuple[torch.tensor, ...]:  # 2 Tuple
-
+        n = self.num_dynamic_assets // 3
         self.t = torch.tensor([counter / 100.0], device=self.device)
 
-        circle_setpoints = self._step_dyn_asset_circle_setpoint()
-        hline_setpoints = self._step_dyn_asset_horizontal_line_setpoint()
-        vline_setpoints = self._step_dyn_asset_vertical_line_setpoint()
+        sin, cos = torch.sin(self.t), torch.cos(self.t)
+
+        circle_asset_centroids = self.dynamic_asset_centroids[:, 0:n, :]
+        circle_setpoints = (
+            torch.tensor([sin, cos, 0], device=self.device).view(-1, 1, 3)
+            + circle_asset_centroids
+        )
+
+        hline_asset_centroids = self.dynamic_asset_centroids[:, n : 2 * n, :]
+        hline_setpoints = (
+            torch.tensor([sin, 0, 0], device=self.device).view(-1, 1, 3)
+            + hline_asset_centroids
+        )
+
+        vline_asset_centroids = self.dynamic_asset_centroids[:, 2 * n : 3 * n, :]
+        vline_setpoints = (
+            torch.tensor([0, 0, sin], device=self.device).view(-1, 1, 3)
+            + vline_asset_centroids
+        )
 
         setpoints = torch.cat(
             (circle_setpoints, hline_setpoints, vline_setpoints), dim=1
         )
 
         dyn_asset_states = states[:, self.dynamic_asset_ids, :]
-        position_errors = setpoints - dyn_asset_states[:, self.dynamic_asset_ids, 0:3]
+
+        position_errors = setpoints - dyn_asset_states[:, :, 0:3]
         velocity_errors = -dyn_asset_states[:, :, 7:10]
+
         rotation_matrices = p3d_transforms.quaternion_to_matrix(
             dyn_asset_states[..., [6, 3, 4, 5]]
         ).transpose(-2, -1)
 
         forces = self.Kp * position_errors + self.Kd * velocity_errors
-        forces[:, :, -1] += 9.81
 
         forces = torch.matmul(rotation_matrices, forces.unsqueeze(-1)).squeeze(-1)
-        torques = torch.ones_like(forces) * torch.sin(self.t) * 0.0
+        torques = torch.zeros_like(forces)
         return (forces, torques)
 
     def _step_dyn_asset_circle_setpoint(self) -> torch.tensor:
         circle_x = torch.sin(self.t)
         circle_y = torch.cos(self.t)
 
-        circle_asset_centroids = self.dynamic_asset_centroids[:, 0:4, :]
+        circle_asset_centroids = self.dynamic_asset_centroids[
+            :, 0 : self.num_dynamic_assets // 3, :
+        ]
         return (
             torch.tensor([circle_x, circle_y, 0], device=self.device).view(-1, 1, 3)
             + circle_asset_centroids
@@ -380,7 +403,9 @@ class AssetManager:
 
     def _step_dyn_asset_horizontal_line_setpoint(self) -> torch.tensor:
         line_x = torch.sin(self.t)
-        horizontal_line_asset_centroids = self.dynamic_asset_centroids[:, 4:8, :]
+        horizontal_line_asset_centroids = self.dynamic_asset_centroids[
+            :, self.num_dynamic_assets // 3 : 11, :
+        ]
         return (
             torch.tensor([line_x, 0, 0], device=self.device).view(-1, 1, 3)
             + horizontal_line_asset_centroids
@@ -388,9 +413,118 @@ class AssetManager:
 
     def _step_dyn_asset_vertical_line_setpoint(self) -> torch.tensor:
         line_z = torch.sin(self.t)
-        vertical_line_asset_centroids = self.dynamic_asset_centroids[:, 8:12, :]
+        vertical_line_asset_centroids = self.dynamic_asset_centroids[:, 11:12, :]
 
         return (
             torch.tensor([0, 0, line_z], device=self.device).view(-1, 1, 3)
             + vertical_line_asset_centroids
         )
+
+    def _sample_dyn_asset_distribution(self, num_movement_patterns) -> torch.tensor:
+
+        from torch.distributions import Categorical
+
+        pass
+
+
+class DynamicObstacleController:
+    def __init__(
+        self, num_dynamic_obstacles: int, num_envs: int, device: torch.device
+    ) -> None:
+        self.speed = None
+        self.dynamic_obstacle_centroids = None
+        self.dynamic_obstacle_ids = None
+        self.circle_obstacle_centroids = None
+        self.hline_obstacle_centroids = None
+        self.vline_obstacle_centroids = None
+
+        self.device = device
+        self.num_envs = num_envs
+        self.num_dynamic_obstacles = num_dynamic_obstacles
+
+        from torch.distributions import Categorical
+
+        probs = torch.tensor([1 / 3.0] * 3, device=self.device).repeat(num_envs, 1)
+        self.multinomial = Categorical(
+            probs
+        )  # torch.multinomial does not support batched sampling
+
+        # This is just used for batched bincount using scatter add since there is no native support for it
+        self.zeros = torch.zeros(self.num_envs, 3, torch.int64, device=self.device)
+        self.ones = torch.ones(
+            self.num_envs, self.num_dynamic_obstacles, device=self.device
+        )
+
+        self.range_tensor = (
+            torch.arange(self.num_dynamic_obstacles, device=self.device)
+            .unsqueeze(0)
+            .unsqueeze(-1)
+        )
+
+        # The masks are used to add values to
+        self.circle_mask = torch.zeros(
+            self.num_envs, self.num_dynamic_obstacles, 3, device=self.device
+        )
+        self.hline_mask = torch.zeros(
+            self.num_envs, self.num_dynamic_obstacles, 3, device=self.device
+        )
+        self.vline_mask = torch.zeros(
+            self.num_envs, self.num_dynamic_obstacles, 3, device=self.device
+        )
+
+        self.k_start = torch.zeros(self.num_envs, 1, 1, device=self.device)
+        self.k_end = torch.zeros(self.num_envs, 1, 1, device=self.device)
+
+    def __call__(self) -> Tuple[torch.tensor, ...]:  # 2 tensor, forces and torques
+        pass
+
+    def sample_movement_pattern_distribution(self, reset_envs) -> None:
+        samples = self.multinomial.sample_n(self.num_dynamic_obstacles).reshape(
+            self.num_envs, self.num_dynamic_obstacles
+        )
+        movement_dist = self.zeros.scatter_add_(1, samples, self.ones)
+
+        for i in range(3):
+            self.k_start = movement_dist[:, i]
+            self.k_end = movement_dist[:,]
+
+        num_circles = movement_dist[:, 0]
+        num_hline = movement_dist[:, 1]
+        num_vline = movement_dist[:, 2]
+
+        pass
+
+    def _step_setpoints(self, counter: float) -> torch.tensor:
+        pass
+
+
+# Example tensor of shape [num_envs, num_obst, 3]
+# num_envs = 4
+# num_obst = 5
+# tensor = torch.randn(num_envs, num_obst, 3)
+
+# Tensors containing start and end k values for each environment
+# k_vals_start = torch.tensor([1, 0, 2, 1])  # Start indices
+# k_vals_end = torch.tensor([3, 2, 4, 3])    # End indices, exclusive
+
+# value_to_add = 1.0  # Example value to add
+
+# # Create a range tensor for comparison
+# range_tensor = torch.arange(num_obst).unsqueeze(0).unsqueeze(-1)  # Shape [1, num_obst, 1]
+
+# # Reshape start and end values for broadcasting
+# k_start_expanded = k_vals_start.unsqueeze(1).unsqueeze(-1)  # Shape [num_envs, 1, 1]
+# k_end_expanded = k_vals_end.unsqueeze(1).unsqueeze(-1)     # Shape [num_envs, 1, 1]
+
+# # Create masks for the start and end ranges
+# mask_start = range_tensor >= k_start_expanded  # Elements greater than or equal to start
+# mask_end = range_tensor < k_end_expanded       # Elements less than end
+
+# # Combine masks to select the interval
+# mask = mask_start & mask_end  # Shape [num_envs, num_obst, 1]
+
+# # Broadcast the mask to match the shape of the tensor
+# mask = mask.expand_as(tensor)  # Shape [num_envs, num_obst, 3]
+
+# # Use the mask to conditionally add the value
+# tensor = torch.where(mask, tensor + value_to_add, tensor)

@@ -18,8 +18,8 @@ def sample_command(args):
 
     env, env_cfg = task_registry.make_env(name=args.task, args=args)
     command_actions = torch.ones((env_cfg.env.num_envs, env_cfg.env.num_actions))
-    command_actions[:, 0] = 0.2
-    command_actions[:, 1] = 0.2
+    command_actions[:, 0] = 0.0
+    command_actions[:, 1] = 0.0
     command_actions[:, 2] = 0.0
     command_actions[:, 3] = 0.0
 
