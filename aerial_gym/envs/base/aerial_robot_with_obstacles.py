@@ -28,8 +28,6 @@ import time
 
 from sevae.inference.scripts.VAENetworkInterface import VAENetworkInterface
 
-import cv2
-
 
 class AerialRobotWithObstacles(BaseTask):
 
