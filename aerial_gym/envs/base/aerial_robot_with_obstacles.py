@@ -26,8 +26,11 @@ from aerial_gym.utils.asset_manager import AssetManager
 from aerial_gym.utils.helpers import asset_class_to_AssetOptions
 import time
 
+import matplotlib.pyplot as plt
+
 
 class AerialRobotWithObstacles(BaseTask):
+
     def __init__(
         self,
         cfg: AerialRobotWithObstaclesCfg,
@@ -249,12 +252,10 @@ class AerialRobotWithObstacles(BaseTask):
                 )
                 torch_cam_tensor = gymtorch.wrap_tensor(camera_tensor)
                 self.camera_tensors.append(torch_cam_tensor)
-                print("Batman")
 
             env_asset_list = self.env_asset_manager.prepare_assets_for_simulation(
                 self.gym, self.sim
             )
-
             asset_counter = 0
 
             # have the segmentation counter be the max defined semantic id + 1. Use this to set the semantic mask of objects that are
@@ -264,7 +265,7 @@ class AerialRobotWithObstacles(BaseTask):
                     self.segmentation_counter, int(dict_item["semantic_id"]) + 1
                 )
 
-            for i, dict_item in enumerate(env_asset_list):
+            for dict_item in env_asset_list:
                 folder_path = dict_item["asset_folder_path"]
                 filename = dict_item["asset_file_name"]
                 asset_options = dict_item["asset_options"]
@@ -368,7 +369,6 @@ class AerialRobotWithObstacles(BaseTask):
 
         self.render(sync_frame_time=False)
         if self.enable_onboard_cameras:
-            print("Batman")
             self.render_cameras()
 
         self.progress_buf += 1
@@ -397,10 +397,8 @@ class AerialRobotWithObstacles(BaseTask):
 
     def reset_idx(self, env_ids):
         num_resets = len(env_ids)
-        if 0 in env_ids:
-            print("\n\n\n RESETTING ENV 0 \n\n\n")
 
-        self.env_asset_manager.randomize_pose()
+        self.env_asset_manager.randomize_pose(reset_envs=env_ids)
 
         self.env_asset_root_states[env_ids, :, 0:3] = (
             self.env_asset_manager.asset_pose_tensor[env_ids, :, 0:3]
@@ -410,7 +408,6 @@ class AerialRobotWithObstacles(BaseTask):
         self.env_asset_root_states[env_ids, :, 3:7] = quat_from_euler_xyz(
             euler_angles[..., 0], euler_angles[..., 1], euler_angles[..., 2]
         )
-
         self.env_asset_root_states[env_ids, :, 7:13] = 0.0
 
         # get environment lower and upper bounds
@@ -445,8 +442,6 @@ class AerialRobotWithObstacles(BaseTask):
 
     def pre_physics_step(self, _actions):
         # resets
-        if self.counter % 250 == 0:
-            print("self.counter:", self.counter)
         self.counter += 1
 
         actions = _actions.to(self.device)
@@ -459,17 +454,16 @@ class AerialRobotWithObstacles(BaseTask):
         self.forces[:] = 0.0
         self.torques[:, :] = 0.0
 
-        (
-            quad_thrusts_mass_normalized,
-            quad_torques_inertia_normalized,
-        ) = self.controller(self.root_states, self.action_input)
+        output_thrusts_mass_normalized, output_torques_inertia_normalized = (
+            self.controller(self.root_states, self.action_input)
+        )
         self.forces[:, 0, 2] = (
             self.robot_mass
             * (-self.sim_params.gravity.z)
-            * quad_thrusts_mass_normalized
+            * output_thrusts_mass_normalized
         )
+        self.torques[:, 0] = output_torques_inertia_normalized
 
-        self.torques[:, 0] = quad_torques_inertia_normalized
         self.forces = torch.where(
             self.forces < 0, torch.zeros_like(self.forces), self.forces
         )
@@ -488,6 +482,7 @@ class AerialRobotWithObstacles(BaseTask):
             :, self.env_asset_manager.dynamic_asset_ids
         ] = dynamic_asset_torques
 
+        # apply actions
         self.gym.apply_rigid_body_force_tensors(
             self.sim,
             gymtorch.unwrap_tensor(self.forces),
@@ -517,8 +512,19 @@ class AerialRobotWithObstacles(BaseTask):
     def dump_images(self):
         for env_id in range(self.num_envs):
             # the depth values are in -ve z axis, so we need to flip it to positive
-            print(self.full_camera_array.size())
             self.full_camera_array[env_id] = -self.camera_tensors[env_id]
+
+            np_image = self.full_camera_array[0].cpu().numpy()
+
+            IMAGE_MAX_DEPTH = 10
+            np_image[np_image > IMAGE_MAX_DEPTH] = IMAGE_MAX_DEPTH
+            np_image[np_image < 0.20] = -1.0
+
+            np_image = np_image / IMAGE_MAX_DEPTH
+            np_image[np_image < 0.2 / IMAGE_MAX_DEPTH] = -1.0
+
+            plt.imshow(np_image, cmap="gray")
+            plt.show()
 
     def compute_observations(self):
         self.obs_buf[..., :3] = self.root_positions
