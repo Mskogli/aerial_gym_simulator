@@ -236,7 +236,6 @@ class AssetManager:
             if self.dynamic_asset_ids is None
             else self.dynamic_asset_ids
         )
-        print("Dyn asset ids", self.dynamic_asset_ids)
         self.num_dynamic_assets = len(self.dynamic_asset_ids)
 
         # adding environment bounds to be loaded as assets
