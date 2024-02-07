@@ -20,7 +20,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
 
     class env:
         num_envs = 64
-        num_observations = 13
+        num_observations = 144
         get_privileged_obs = True  # if True the states of all entitites in the environment will be returned as privileged observations, otherwise None will be returned
         num_actions = 4
         env_spacing = 5.0  # not used with heightfields/trimeshes
