@@ -24,7 +24,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         get_privileged_obs = True  # if True the states of all entitites in the environment will be returned as privileged observations, otherwise None will be returned
         num_actions = 4
         env_spacing = 5.0  # not used with heightfields/trimeshes
-        episode_length_s = 5  # episode length in seconds
+        episode_length_s = 2  # episode length in seconds
         num_control_steps_per_env_step = (
             10  # number of control & physics steps between camera renders
         )
@@ -399,11 +399,11 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         include_asset_type = {"thin": False, "trees": False, "objects": True}
 
         include_env_bound_type = {
-            "front_wall": False,
-            "left_wall": False,
+            "front_wall": True,
+            "left_wall": True,
             "top_wall": False,
-            "back_wall": False,
-            "right_wall": False,
+            "back_wall": True,
+            "right_wall": True,
             "bottom_wall": False,
         }
 

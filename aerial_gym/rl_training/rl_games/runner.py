@@ -13,6 +13,7 @@ from gym import spaces
 from argparse import Namespace
 
 from rl_games.common import env_configurations, vecenv
+from trajectoryLogger import TrajectoryLogger
 
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 # import warnings
@@ -22,7 +23,9 @@ os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 class ExtractObsWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
-        # self.logger = TrajectoryLogger("trajectories.jsonl", 1, 100)
+        self.logger = TrajectoryLogger(
+            "quad_depth_imgs", num_envs=10, trajectory_length=150
+        )
 
     def reset(self, **kwargs):
         observations, _privileged_observations = super().reset(**kwargs)
@@ -33,12 +36,12 @@ class ExtractObsWrapper(gym.Wrapper):
             action
         )
 
-        # self.logger.update_log_buffer(
-        #    observations[..., :128].cpu().numpy(),
-        #    observations[..., 128:].cpu().numpy(),
-        #    infos["actions"].cpu().numpy(),
-        #    infos["resets"].cpu().numpy(),
-        # )
+        self.logger.update_log_buffer(
+            infos["depth"].cpu().numpy(),
+            observations[..., 128:].cpu().numpy(),
+            infos["actions"].cpu().numpy(),
+            infos["resets"].cpu().numpy(),
+        )
 
         return (
             observations,

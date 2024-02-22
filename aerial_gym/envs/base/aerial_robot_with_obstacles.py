@@ -138,7 +138,7 @@ class AerialRobotWithObstacles(BaseTask):
 
         if self.cfg.env.enable_onboard_cameras:
             self.full_camera_array = torch.zeros(
-                (self.num_envs, 270, 480), device=self.device
+                (self.num_envs, 270, 480), dtype=torch.float32, device=self.device
             )
 
         if self.viewer:
@@ -386,12 +386,15 @@ class AerialRobotWithObstacles(BaseTask):
             ones = torch.ones_like(self.reset_buf)
             self.reset_buf = torch.where(self.collisions > 0, ones, self.reset_buf)
 
+        self.extras["resets"] = self.reset_buf
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
             self.reset_idx(reset_env_ids)
 
         self.time_out_buf = self.progress_buf > self.max_episode_length
         self.extras["time_outs"] = self.time_out_buf
+        self.extras["depth"] = self.full_camera_array
+        self.extras["actions"] = actions
         return (
             self.obs_buf,
             self.privileged_obs_buf,
