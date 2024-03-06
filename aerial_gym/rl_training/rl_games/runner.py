@@ -23,13 +23,9 @@ os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 class ExtractObsWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
-<<<<<<< HEAD
         self.logger = TrajectoryLogger(
             "quad_depth_imgs", num_envs=40, trajectory_length=75
         )
-=======
-        # self.logger = TrajectoryLogger("trajectories.jsonl", 1, 100)
->>>>>>> 4b9236733511f6ddbcdc45783f00b1d81b203f81
 
     def reset(self, **kwargs):
         observations, _privileged_observations = super().reset(**kwargs)
@@ -40,21 +36,12 @@ class ExtractObsWrapper(gym.Wrapper):
             action
         )
 
-<<<<<<< HEAD
         self.logger.update_log_buffer(
             infos["depth"].cpu().numpy(),
             observations[..., 128:].cpu().numpy(),
             infos["actions"].cpu().numpy(),
             infos["resets"].cpu().numpy(),
         )
-=======
-        # self.logger.update_log_buffer(
-        #    observations[..., :128].cpu().numpy(),
-        #    observations[..., 128:].cpu().numpy(),
-        #    infos["actions"].cpu().numpy(),
-        #    infos["resets"].cpu().numpy(),
-        # )
->>>>>>> 4b9236733511f6ddbcdc45783f00b1d81b203f81
 
         return (
             observations,
@@ -98,13 +85,8 @@ class AERIALRLGPUEnv(vecenv.IVecEnv):
         print(info["action_space"], info["observation_space"])
 
         return info
-<<<<<<< HEAD
 
 
-=======
-
-
->>>>>>> 4b9236733511f6ddbcdc45783f00b1d81b203f81
 env_configurations.register(
     "quad",
     {
