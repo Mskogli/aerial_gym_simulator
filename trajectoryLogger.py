@@ -27,7 +27,6 @@ class TrajectoryLogger:
         for env_id in range(self.num_envs):
             log_object = self.log_buffer[env_id]
 
-            # Assuming depth_imgs, actions, and states are already in an efficient data format
             log_object.append(
                 depth_imgs[env_id].tolist(),
                 actions[env_id].tolist(),
@@ -46,12 +45,9 @@ class TrajectoryLogger:
                 self.logged_trajetories += 1
 
                 for i in range(len(log_object.latents)):
-                    # Apply compression using gzip with a compression level of 4 as an example
                     dset = trajectory_grp.create_dataset(
                         f"image_{i}",
                         data=log_object.latents[i],
-                        compression="gzip",
-                        compression_opts=5,
                     )
                     dset.attrs["actions"] = log_object.actions[i]
                     dset.attrs["states"] = log_object.states[i]
@@ -84,13 +80,11 @@ if __name__ == "__main__":
     ) as f:
         print(f.keys())
 
-        TRAJ_NUM = 2
+        TRAJ_NUM = 200
 
-        traj_grp = f[f"trajectory_{TRAJ_NUM}"]
-
-        for _, img_dataset in traj_grp.items():
-            actions = img_dataset.attrs["actions"]
-            imgs = img_dataset[:]
+        for i in range(75):
+            imgs = f[f"trajectory_{TRAJ_NUM}/image_{i}"][:]
+            print(f[f"trajectory_{TRAJ_NUM}/image_{i}"].attrs["actions"])
             plt.imshow(imgs)
             plt.show()
 

@@ -506,7 +506,6 @@ class AerialRobotWithObstacles(BaseTask):
         self.gym.render_all_camera_sensors(self.sim)
         self.gym.start_access_image_tensors(self.sim)
         self.dump_images()
-        self._process_depth_images()
         self._compute_latent_representation()
         self.gym.end_access_image_tensors(self.sim)
         return
@@ -532,18 +531,6 @@ class AerialRobotWithObstacles(BaseTask):
         self.latents = (
             self.seVAE.forward_torch(self.full_camera_array).clone().to(self.device)
         )
-
-    def _process_depth_images(self):
-        IMAGE_MAX_DEPTH = 10
-
-        self.full_camera_array[torch.isnan(self.full_camera_array)] = IMAGE_MAX_DEPTH
-        self.full_camera_array[self.full_camera_array > IMAGE_MAX_DEPTH] = (
-            IMAGE_MAX_DEPTH
-        )
-        self.full_camera_array[self.full_camera_array < 0.20] = -1.0
-
-        self.full_camera_array = self.full_camera_array / IMAGE_MAX_DEPTH
-        self.full_camera_array[self.full_camera_array < 0.2 / IMAGE_MAX_DEPTH] = -1.0
 
     def compute_observations(self):
         self.obs_buf[..., :128] = self.latents
