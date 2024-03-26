@@ -16,7 +16,7 @@ WALL_SEMANTIC_ID = 8
 
 
 class AerialRobotWithObstaclesCfg(BaseConfig):
-    seed = 1
+    seed = 2
 
     class env:
         num_envs = 64
@@ -24,7 +24,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         get_privileged_obs = True  # if True the states of all entitites in the environment will be returned as privileged observations, otherwise None will be returned
         num_actions = 4
         env_spacing = 5.0  # not used with heightfields/trimeshes
-        episode_length_s = 2  # episode length in seconds
+        episode_length_s = 1.1  # episode length in seconds
         num_control_steps_per_env_step = (
             10  # number of control & physics steps between camera renders
         )
@@ -191,8 +191,8 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [70, 200, 100]
 
     class object_asset_params(asset_state_params):
-        num_assets = 50
-        num_dynamic_assets = 21
+        num_assets = 35
+        num_dynamic_assets = 15
 
         max_position_ratio = [0.95, 0.95, 0.95]  # min position as a ratio of the bounds
         min_position_ratio = [0.05, 0.05, 0.2]  # max position as a ratio of the bounds

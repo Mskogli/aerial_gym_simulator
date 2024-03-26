@@ -28,9 +28,9 @@ class TrajectoryLogger:
             log_object = self.log_buffer[env_id]
 
             log_object.append(
-                depth_imgs[env_id].tolist(),
-                actions[env_id].tolist(),
-                states[env_id].tolist(),
+                depth_imgs[env_id],
+                actions[env_id],
+                states[env_id],
             )
 
             if (
@@ -66,21 +66,13 @@ if __name__ == "__main__":
     states = np.array([[1, 2, 3], [4, 5, 6]]).reshape(2, 3)
     resets = np.array([[1], [1]]).reshape(2, 1)
 
-    # logger = TrajectoryLogger(
-    #     "/home/mathias/dev/aerial_gym_simulator/aerial_gym/rl_training/rl_games/quad_depth_imgs",
-    #     2,
-    #     1,
-    # )
-
-    # logger.update_log_buffer(latents, states, actions, resets)
-
     with h5py.File(
         "/home/mathias/dev/aerial_gym_simulator/aerial_gym/rl_training/rl_games/quad_depth_imgs",
         "r",
     ) as f:
         print(f.keys())
 
-        TRAJ_NUM = 200
+        TRAJ_NUM = 10
 
         for i in range(75):
             imgs = f[f"trajectory_{TRAJ_NUM}/image_{i}"][:]

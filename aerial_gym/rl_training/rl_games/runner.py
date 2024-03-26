@@ -1,7 +1,8 @@
 import numpy as np
 import os
-import yaml
 
+
+import yaml
 import isaacgym
 
 
@@ -15,7 +16,6 @@ from argparse import Namespace
 from rl_games.common import env_configurations, vecenv
 from trajectoryLogger import TrajectoryLogger
 
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 # import warnings
 # warnings.filterwarnings("error")
 
@@ -24,7 +24,7 @@ class ExtractObsWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
         self.logger = TrajectoryLogger(
-            "quad_depth_imgs", num_envs=1, trajectory_length=75
+            "quad_depth_imgs", num_envs=128, trajectory_length=100
         )
 
     def reset(self, **kwargs):
@@ -37,10 +37,10 @@ class ExtractObsWrapper(gym.Wrapper):
         )
 
         self.logger.update_log_buffer(
-            infos["depth"].cpu().numpy(),
-            observations[..., 128:].cpu().numpy(),
-            infos["actions"].cpu().numpy(),
-            infos["resets"].cpu().numpy(),
+            infos["depth"].cpu().numpy().astype(np.float32),
+            observations[..., 128:].cpu().numpy().astype(np.float32),
+            infos["actions"].cpu().numpy().astype(np.float32),
+            infos["resets"].cpu().numpy().astype(np.float32),
         )
 
         return (
@@ -260,6 +260,7 @@ def update_config(config, args):
 
 
 if __name__ == "__main__":
+
     os.makedirs("nn", exist_ok=True)
     os.makedirs("runs", exist_ok=True)
 

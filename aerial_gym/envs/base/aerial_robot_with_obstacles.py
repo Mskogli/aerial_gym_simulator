@@ -24,9 +24,12 @@ from aerial_gym.envs.controllers.controller import Controller
 from aerial_gym.utils.asset_manager import AssetManager
 
 from aerial_gym.utils.helpers import asset_class_to_AssetOptions
-import time
 
 from sevae.inference.scripts.VAENetworkInterface import VAENetworkInterface
+from omegaconf import DictConfig
+
+import jax.numpy as jnp
+import time
 
 
 class AerialRobotWithObstacles(BaseTask):
@@ -39,6 +42,7 @@ class AerialRobotWithObstacles(BaseTask):
         sim_device,
         headless,
     ):
+
         self.cfg = cfg
 
         self.max_episode_length = int(self.cfg.env.episode_length_s / self.cfg.sim.dt)
@@ -140,6 +144,9 @@ class AerialRobotWithObstacles(BaseTask):
             self.full_camera_array = torch.zeros(
                 (self.num_envs, 270, 480), dtype=torch.float32, device=self.device
             )
+            self.log_camera_array = torch.zeros(
+                (self.num_envs, 135, 240), dtype=torch.float32, device=self.device
+            )
 
         if self.viewer:
             cam_pos_x, cam_pos_y, cam_pos_z = (
@@ -206,6 +213,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.envs = []
         self.camera_handles = []
         self.camera_tensors = []
+        self.camera_tensors_2 = []
 
         # Set Camera Properties
         camera_props = gymapi.CameraProperties()
@@ -214,6 +222,13 @@ class AerialRobotWithObstacles(BaseTask):
         camera_props.height = self.cam_resolution[1]
         camera_props.far_plane = 15.0
         camera_props.horizontal_fov = 87.0
+
+        camera_props_2 = gymapi.CameraProperties()
+        camera_props_2.enable_tensors = True
+        camera_props_2.width = 240
+        camera_props_2.height = 135
+        camera_props_2.far_plane = 15.0
+        camera_props_2.horizontal_fov = 87.0
         # local camera transform
         local_transform = gymapi.Transform()
         # position of the camera relative to the body
@@ -243,7 +258,10 @@ class AerialRobotWithObstacles(BaseTask):
             self.actor_handles.append(actor_handle)
 
             if self.enable_onboard_cameras:
+
                 cam_handle = self.gym.create_camera_sensor(env_handle, camera_props)
+                cam_handle_2 = self.gym.create_camera_sensor(env_handle, camera_props_2)
+
                 self.gym.attach_camera_to_body(
                     cam_handle,
                     env_handle,
@@ -251,12 +269,29 @@ class AerialRobotWithObstacles(BaseTask):
                     local_transform,
                     gymapi.FOLLOW_TRANSFORM,
                 )
+                self.gym.attach_camera_to_body(
+                    cam_handle_2,
+                    env_handle,
+                    actor_handle,
+                    local_transform,
+                    gymapi.FOLLOW_TRANSFORM,
+                )
+
                 self.camera_handles.append(cam_handle)
+                self.camera_handles.append(cam_handle_2)
+
                 camera_tensor = self.gym.get_camera_image_gpu_tensor(
                     self.sim, env_handle, cam_handle, gymapi.IMAGE_DEPTH
                 )
+                camera_tensor_2 = self.gym.get_camera_image_gpu_tensor(
+                    self.sim, env_handle, cam_handle_2, gymapi.IMAGE_DEPTH
+                )
+
                 torch_cam_tensor = gymtorch.wrap_tensor(camera_tensor)
+                torch_cam_tensor_2 = gymtorch.wrap_tensor(camera_tensor_2)
+
                 self.camera_tensors.append(torch_cam_tensor)
+                self.camera_tensors_2.append(torch_cam_tensor_2)
 
             env_asset_list = self.env_asset_manager.prepare_assets_for_simulation(
                 self.gym, self.sim
@@ -393,7 +428,7 @@ class AerialRobotWithObstacles(BaseTask):
 
         self.time_out_buf = self.progress_buf > self.max_episode_length
         self.extras["time_outs"] = self.time_out_buf
-        self.extras["depth"] = self.full_camera_array
+        self.extras["depth"] = self.log_camera_array
         self.extras["actions"] = actions
         return (
             self.obs_buf,
@@ -526,11 +561,10 @@ class AerialRobotWithObstacles(BaseTask):
         for env_id in range(self.num_envs):
             # the depth values are in -ve z axis, so we need to flip it to positive
             self.full_camera_array[env_id] = -self.camera_tensors[env_id]
+            self.log_camera_array[env_id] = -self.camera_tensors_2[env_id]
 
     def _compute_latent_representation(self):
-        self.latents = (
-            self.seVAE.forward_torch(self.full_camera_array).clone().to(self.device)
-        )
+        self.latents = self.seVAE.forward_torch(self.full_camera_array)
 
     def compute_observations(self):
         self.obs_buf[..., :128] = self.latents
@@ -594,62 +628,19 @@ def compute_quadcopter_reward(
     max_episode_length,
     collisions,
 ):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, float, Tensor) -> Tuple[Tensor, Tensor]
-
-    R_GOAL = 100
-    R_OBST = -100
-    R_MB = -40
-    R_TO = 0
-
-    alpha_tiltage = 0.0
-    alpha_spinnage = 0.0
-    alpha_pos = 1.0
-    alpha_vels = 0.0
-
-    target_dist = torch.norm((root_positions - goal_positions), dim=-1)
-    pos_reward = 2.0 / (1.0 + target_dist * target_dist)
-
-    # uprightness
-    ups = quat_axis(root_quats, 2)
-    tiltage = torch.norm((1 - ups[..., 2]), dim=-1)
-
-    # spinning
-    up_reward = 1 / (1 + tiltage)
-
-    # spinning
-    spinnage = torch.norm(root_angvels[..., 2], dim=-1)
-    spinnage_reward = 1.0 / (1.0 + spinnage)
-
-    vel = torch.norm(root_linvels[..., :], dim=-1)
-    vel_reward = 1.0 / (1.0 + vel)
-
-    # combined reward
-    # uprigness and spinning only matter when close to the target
-    reward = (
-        alpha_pos * pos_reward
-        + pos_reward * (alpha_tiltage * up_reward + alpha_spinnage * spinnage_reward)
-        + alpha_vels * vel_reward
-    )
+    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, float, Tensor) -> Tuple[int, int]
 
     # resets due to misbehavior
-    ones = torch.ones_like(reset_buf)
-    die = torch.zeros_like(reset_buf)
+    # ones = torch.ones_like(reset_buf)
+    # die = torch.zeros_like(reset_buf)
 
-    resets_timeouts = torch.where(progress_buf >= max_episode_length - 1, ones, die)
-    resets_misbehaviour = torch.where(torch.norm(root_positions, dim=1) > 20, ones, die)
-    resets_collisions = torch.where(collisions > 0, ones, die)
-    resets_goal = torch.where(target_dist < 0.5, ones, die)
+    # resets_timeouts = torch.where(progress_buf >= max_episode_length - 1, ones, die)
+    # resets_misbehaviour = torch.where(torch.norm(root_positions, dim=1) > 20, ones, die)
+    # resets_collisions = torch.where(collisions > 0, ones, die)
+    # resets_goal = torch.where(target_dist < 0.5, ones, die)
 
-    reset = resets_timeouts + resets_misbehaviour + resets_collisions + resets_goal
+    # reset = resets_timeouts + resets_misbehaviour + resets_collisions + resets_goal
 
     # terminal rewards incurred at the end of the episode
 
-    reward = (
-        reward
-        + R_OBST * resets_collisions
-        + R_TO * resets_timeouts
-        + R_GOAL * resets_goal
-        + R_MB * resets_misbehaviour
-    )
-
-    return reward, reset
+    return 0, 0
