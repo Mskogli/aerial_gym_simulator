@@ -31,7 +31,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         enable_onboard_cameras = True  # enable onboard cameras
         reset_on_collision = True  # reset environment when contact force on quadrotor is above a threshold
         create_ground_plane = True  # create a ground plane
-
+        dynamic_assets = True
 
     class viewer:
         ref_env = 0
@@ -133,7 +133,6 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         num_assets = 10
         num_dynamic = 2
 
-
         collision_mask = 1  # objects with the same collision mask will not collide
 
         max_position_ratio = [0.95, 0.95, 0.95]  # min position as a ratio of the bounds
@@ -165,7 +164,6 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
     class tree_asset_params(asset_state_params):
         num_assets = 1
         num_dynamic = 1
-
 
         collision_mask = 1  # objects with the same collision mask will not collide
 
@@ -403,7 +401,6 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         folder_path = f"{AERIAL_GYM_ROOT_DIR}/resources/models/environment_assets"
 
         include_asset_type = {"thin": False, "trees": False, "objects": True}
-
 
         include_env_bound_type = {
             "front_wall": False,
