@@ -54,7 +54,7 @@ params:
     clip_value: False
     num_actors: 128
     horizon_length: 24
-    minibatch_size: 256
+    minibatch_size: 1
     mini_epochs: 5
     critic_coef: 2
     normalize_input: True
@@ -63,7 +63,7 @@ params:
     normalize_value: True
     use_diagnostics: True
     value_bootstrap: True
-    #weight_decay: 0.0001
+    weight_decay: 0.0001
     use_smooth_clamp: False
 
     player:
