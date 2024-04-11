@@ -67,12 +67,12 @@ if __name__ == "__main__":
     resets = np.array([[1], [1]]).reshape(2, 1)
 
     with h5py.File(
-        "/home/mathias/dev/aerial_gym_simulator/aerial_gym/rl_training/rl_games/quad_depth_imgs",
+        "/home/mathias/aerial_gym_simulator/aerial_gym/rl_training/rl_games/quad_depth_imgs",
         "r",
     ) as f:
         print(f.keys())
 
-        TRAJ_NUM = 10
+        TRAJ_NUM = 12
 
         for i in range(75):
             imgs = f[f"trajectory_{TRAJ_NUM}/image_{i}"][:]

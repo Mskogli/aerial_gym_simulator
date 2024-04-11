@@ -628,19 +628,18 @@ def compute_quadcopter_reward(
     max_episode_length,
     collisions,
 ):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, float, Tensor) -> Tuple[int, int]
+    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, float, Tensor) -> Tuple[int, Tensor]
 
     # resets due to misbehavior
-    # ones = torch.ones_like(reset_buf)
-    # die = torch.zeros_like(reset_buf)
+    ones = torch.ones_like(reset_buf)
+    die = torch.zeros_like(reset_buf)
 
-    # resets_timeouts = torch.where(progress_buf >= max_episode_length - 1, ones, die)
-    # resets_misbehaviour = torch.where(torch.norm(root_positions, dim=1) > 20, ones, die)
-    # resets_collisions = torch.where(collisions > 0, ones, die)
-    # resets_goal = torch.where(target_dist < 0.5, ones, die)
+    resets_timeouts = torch.where(progress_buf >= max_episode_length - 1, ones, die)
+    resets_misbehaviour = torch.where(torch.norm(root_positions, dim=1) > 20, ones, die)
+    resets_collisions = torch.where(collisions > 0, ones, die)
 
-    # reset = resets_timeouts + resets_misbehaviour + resets_collisions + resets_goal
+    reset = resets_timeouts + resets_misbehaviour + resets_collisions
 
     # terminal rewards incurred at the end of the episode
 
-    return 0, 0
+    return 0, reset

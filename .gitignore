@@ -5,5 +5,5 @@ runs/
 *.tfevents*
 *.egg-info/
 resources/
-
+aerial_gym/rl_training/rl_games/quad_depth_imgs
 */__pycache__/
