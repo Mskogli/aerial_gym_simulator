@@ -9,6 +9,7 @@ import os
 import torch
 import sys
 import time
+import jax
 
 from aerial_gym import AERIAL_GYM_ROOT_DIR, AERIAL_GYM_ROOT_DIR
 
@@ -33,8 +34,9 @@ class AerialRobotWithObstacles(BaseTask):
         sim_device,
         headless,
     ):  
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+        
         os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+        jax.config.update("jax_default_device", jax.devices()[0])        
         
         self.cfg = cfg
 
@@ -59,14 +61,14 @@ class AerialRobotWithObstacles(BaseTask):
         self.min_depth_value = 0
 
         # RL Config
-        self.S4WM = S4WMTorchWrapper(
-            self.num_envs,
-            "/home/mihir/dev-mathias/structured-state-space-wm/weights/512_resnet_encoder_decoder",
-            d_latent=1024,
-            d_pssm_blocks=512,
-            num_pssm_blocks=3,
-            d_ssm=100,
-        )
+        # self.S4WM = S4WMTorchWrapper(
+        #     self.num_envs,
+        #     "/home/mihir/dev-mathias/structured-state-space-wm/weights/512_resnet_encoder_decoder",
+        #     d_latent=1024,
+        #     d_pssm_blocks=512,
+        #     num_pssm_blocks=3,
+        #     d_ssm=100,
+        # )
         
         self.pred_horizon = cfg.env.prediction_horizon
         self.latent_dim = cfg.env.latent_dim
@@ -76,10 +78,10 @@ class AerialRobotWithObstacles(BaseTask):
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless)
 
         self.latents = torch.zeros(
-            (self.num_envs, self.latent_dim), dtype=torch.float32, device=self.device
+            (self.num_envs, self.latent_dim), dtype=torch.float32, device=self.device, requires_grad=False
         )
         self.hidden = torch.zeros(
-            (self.num_envs, self.hidden_dim), dtype=torch.float32, device=self.device
+            (self.num_envs, self.hidden_dim), dtype=torch.float32, device=self.device, requires_grad=False
         )
 
         self.root_tensor = self.gym.acquire_actor_root_state_tensor(self.sim)
@@ -138,7 +140,6 @@ class AerialRobotWithObstacles(BaseTask):
             (self.num_envs, self.pred_horizon, 4),
             dtype=torch.float32,
             device=self.device,
-            requires_grad=False
         )
         
         # control tensors
@@ -295,6 +296,8 @@ class AerialRobotWithObstacles(BaseTask):
                     self.sim, env_handle, cam_handle, gymapi.IMAGE_DEPTH
                 )
                 torch_cam_tensor = gymtorch.wrap_tensor(camera_tensor)
+                print("DEVICE: ", torch_cam_tensor.device)
+                torch_cam_tensor = torch_cam_tensor.to(device=self.device)
                 self.camera_tensors.append(torch_cam_tensor)
 
             env_asset_list = self.env_asset_manager.prepare_assets_for_simulation(
@@ -407,6 +410,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.trajectory = trajectory.view(self.num_envs, self.pred_horizon, 4)
         self.trajectory = tensor_clamp(self.trajectory, self.action_lower_limits, self.action_upper_limits)
         self.reset_collision_buf()
+        
         for i in range(self.pred_horizon):
             # Control frequency 100hz
             for _ in range(self.cfg.env.num_control_steps_per_env_step):
@@ -418,11 +422,9 @@ class AerialRobotWithObstacles(BaseTask):
             
             self.render(sync_frame_time=False)
             self.render_cameras()
-            
-            self.latents, self.hidden = self.S4WM.forward(self.full_camera_array.view(self.num_envs, 1, self.cam_resolution[1], self.cam_resolution[0], 1), 
-                                     self.trajectory[:, i].view(self.num_envs, 1, 4), 
-                                     self.latents.view(self.num_envs, 1, self.latent_dim))
-            
+            # self.latents, self.hidden = self.S4WM.forward(self.full_camera_array.view(self.num_envs, 1, self.cam_resolution[1], self.cam_resolution[0], 1), 
+            #                          self.trajectory[:, i].view(self.num_envs, 1, 4), 
+            #                          self.latents.view(self.num_envs, 1, self.latent_dim))
             self.check_collisions()
             
         self.latents = self.latents.squeeze()
@@ -430,7 +432,6 @@ class AerialRobotWithObstacles(BaseTask):
         
         self.compute_observations()
         self.compute_reward()
-        print("Rewards: ", self.rew_buf)
         
         if self.cfg.env.reset_on_collision:
             ones = torch.ones_like(self.reset_buf)
@@ -441,7 +442,6 @@ class AerialRobotWithObstacles(BaseTask):
         )  # Record resets in order to facilitate data logging
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
-            print(reset_env_ids)
             self.reset_idx(reset_env_ids)
 
         self.time_out_buf = self.progress_buf > self.max_episode_length
@@ -458,7 +458,7 @@ class AerialRobotWithObstacles(BaseTask):
     def reset_idx(self, env_ids):
         num_resets = len(env_ids)
 
-        self.env_asset_manager.randomize_pose()
+        self.env_asset_manager.randomize_pose(reset_envs=env_ids)
 
         self.env_asset_root_states[env_ids, :, 0:3] = (
             self.env_asset_manager.asset_pose_tensor[env_ids, :, 0:3]
@@ -496,7 +496,17 @@ class AerialRobotWithObstacles(BaseTask):
 
         self.root_states[env_ids, 3:6] = 0  # standard orientation, can be randomized
         self.root_states[env_ids, 6] = 1
-
+        
+        #self.gym.fetch_results(self.sim, True)
+        #self.gym.step_graphics(self.sim)
+        
+        #self.render_cameras()
+        
+        #self.S4WM.reset_cache(env_ids)
+        self.latents[env_ids] = 0
+        self.hidden[env_ids] = 0
+        
+        #self.latents[env_ids] = self.S4WM.encode(self.full_camera_array.view(self.num_envs, 1, self.cam_resolution[1], self.cam_resolution[0], 1)).squeeze()[env_ids]
         self.compute_observations()  # Reset the observation buffer
 
         self.gym.set_actor_root_state_tensor(self.sim, self.root_tensor)
@@ -574,8 +584,9 @@ class AerialRobotWithObstacles(BaseTask):
         # Need to keep collisions that has happened early in the trajectory
         prev_collisions = torch.nonzero(self.collisions)
         self.collisions = torch.where(
-            torch.norm(self.contact_forces, dim=1) > 0.1, ones, zeros
+            torch.norm(self.contact_forces, dim=1) > 0.0, ones, zeros
         )
+        print(self.contact_forces)
         self.collisions[prev_collisions] = 1
 
     def dump_images(self):
@@ -710,6 +721,6 @@ def calculate_rewards(
     
     resets_collisions = torch.where(collisions > 0, ones, zeros)
     resets_timeout = torch.where(progress_buffer >= max_episode_length - 1, ones, zeros)
-    resets = resets_timeout + resets_collisions
+    resets = resets_collisions + resets_timeout
 
     return reward + penalty, resets

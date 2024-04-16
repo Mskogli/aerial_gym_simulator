@@ -328,9 +328,17 @@ class AssetManager:
             self.asset_pose_tensor,
         )
 
-        self.dynamic_asset_centroids = self.asset_pose_tensor[
-            :, self.dynamic_asset_ids, :3
-        ]
+        if self.dynamic_asset_ids is not None:
+            dynamic_asset_pose_tensor = self.asset_pose_tensor[
+                :, self.dynamic_asset_ids, :
+            ]
+
+            if self.dynamic_asset_centroids is not None:
+                self.dynamic_asset_centroids[reset_envs, :] = dynamic_asset_pose_tensor[
+                    reset_envs, :, :3
+                ]
+            else:
+                self.dynamic_asset_centroids = dynamic_asset_pose_tensor[:, :, :3]
 
         return
 

@@ -22,7 +22,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         num_envs = 64
         get_privileged_obs = True  # if True the states of all entitites in the environmsent will be returned as privileged observations, otherwise None will be returned
         env_spacing = 5.0  # not used with heightfields/trimeshes
-        episode_length_s = 1  # episode length in seconds
+        episode_length_s = 3  # episode length in seconds
         num_control_steps_per_env_step = (
             10  # number of control & physics steps between camera renders
         )
@@ -32,7 +32,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         dynamic_assets = True
         
         # RL stuff
-        prediction_horizon = 5
+        prediction_horizon = 2
         latent_dim = 1024
         hidden_dim = 512
         num_actions = 4 * prediction_horizon
@@ -200,7 +200,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [70, 200, 100]
 
     class object_asset_params(asset_state_params):
-        num_assets = 24
+        num_assets = 36
         num_dynamic = 12
 
         max_position_ratio = [0.95, 0.95, 0.95]  # min position as a ratio of the bounds
@@ -408,11 +408,11 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         include_asset_type = {"thin": False, "trees": False, "objects": True}
 
         include_env_bound_type = {
-            "front_wall": False,
-            "left_wall": False,
+            "front_wall": True,
+            "left_wall": True,
             "top_wall": False,
-            "back_wall": False,
-            "right_wall": False,
+            "back_wall": True,
+            "right_wall": True,
             "bottom_wall": False,
         }
 

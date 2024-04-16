@@ -2,7 +2,6 @@ import numpy as np
 import os
 import yaml
 
-
 import isaacgym
 
 
@@ -244,6 +243,7 @@ def update_config(config, args):
 
 
 if __name__ == "__main__":
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     os.makedirs("nn", exist_ok=True)
     os.makedirs("runs", exist_ok=True)
 

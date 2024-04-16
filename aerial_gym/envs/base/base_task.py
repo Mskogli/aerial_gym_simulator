@@ -50,14 +50,14 @@ class BaseTask():
 
         # env device is GPU only if sim is on GPU and use_gpu_pipeline=True, otherwise returned tensors are copied to CPU by physX.
         if sim_device_type=='cuda' and sim_params.use_gpu_pipeline:
-            self.device = self.sim_device
+            self.device = "cuda:0"
         else:
             self.device = 'cpu'
 
         # graphics device for rendering, -1 for no rendering
         self.graphics_device_id = self.sim_device_id
-        if self.headless == True:
-            self.graphics_device_id = -1
+        # if self.headless == True:
+        #     self.graphics_device_id = -1
 
         self.num_envs = cfg.env.num_envs
         self.num_obs = cfg.env.num_observations
