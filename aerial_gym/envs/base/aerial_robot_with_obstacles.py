@@ -296,7 +296,6 @@ class AerialRobotWithObstacles(BaseTask):
                     self.sim, env_handle, cam_handle, gymapi.IMAGE_DEPTH
                 )
                 torch_cam_tensor = gymtorch.wrap_tensor(camera_tensor)
-                print("DEVICE: ", torch_cam_tensor.device)
                 torch_cam_tensor = torch_cam_tensor.to(device=self.device)
                 self.camera_tensors.append(torch_cam_tensor)
 
