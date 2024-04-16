@@ -20,19 +20,23 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
 
     class env:
         num_envs = 64
-        num_observations = 3088
-        prediction_horizon = 10
         get_privileged_obs = True  # if True the states of all entitites in the environmsent will be returned as privileged observations, otherwise None will be returned
-        num_actions = 4 * prediction_horizon
         env_spacing = 5.0  # not used with heightfields/trimeshes
-        episode_length_s = 10  # episode length in seconds
+        episode_length_s = 1  # episode length in seconds
         num_control_steps_per_env_step = (
             10  # number of control & physics steps between camera renders
         )
         enable_onboard_cameras = True  # enable onboard cameras
         reset_on_collision = True  # reset environment when contact force on quadrotor is above a threshold
         create_ground_plane = True  # create a ground plane
-        dynamic_assets = False
+        dynamic_assets = True
+        
+        # RL stuff
+        prediction_horizon = 5
+        latent_dim = 1024
+        hidden_dim = 512
+        num_actions = 4 * prediction_horizon
+        num_observations = latent_dim + hidden_dim + 16
 
     class viewer:
         ref_env = 0
