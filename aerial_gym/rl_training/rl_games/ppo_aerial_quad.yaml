@@ -29,7 +29,7 @@ params:
         name: default
         scale: 2
   config:
-    env_name: quad
+    env_name: quad_with_obstacles
     env_config:
       num_envs: 4096
       
@@ -53,8 +53,8 @@ params:
     e_clip: 0.2
     clip_value: False
     num_actors: 4096
-    horizon_length: 24
-    minibatch_size: 8192
+    horizon_length: 32
+    minibatch_size: 128
     mini_epochs: 5
     critic_coef: 2
     normalize_input: True

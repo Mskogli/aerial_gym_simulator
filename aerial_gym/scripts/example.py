@@ -13,20 +13,21 @@ from aerial_gym.envs import *
 from aerial_gym.utils import get_args, task_registry
 import torch
 
+
 def sample_command(args):
 
     env, env_cfg = task_registry.make_env(name=args.task, args=args)
     print("Number of environments", env_cfg.env.num_envs)
     command_actions = torch.zeros((env_cfg.env.num_envs, env_cfg.env.num_actions))
     command_actions[:, 0] = 0.0
-    command_actions[:, 1] = 0.0
+    command_actions[:, 1] = 1.0
     command_actions[:, 2] = 0.0
     command_actions[:, 3] = 0.8
 
     env.reset()
     for i in range(0, 50000):
         obs, priviliged_obs, rewards, resets, extras = env.step(command_actions)
-            
+
         print("Done", i)
         if i % 500 == 0:
             print("Resetting environment")
@@ -40,6 +41,7 @@ def sample_command(args):
             print("------------------")
             env.reset()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     args = get_args()
     sample_command(args)
