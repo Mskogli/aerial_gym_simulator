@@ -41,7 +41,11 @@ class AerialRobotWithObstacles(BaseTask):
     ):
         self.cfg = cfg
 
-        self.max_episode_length = int(self.cfg.env.episode_length_s / self.cfg.sim.dt)
+        self.max_episode_length = int(
+            self.cfg.env.episode_length_s
+            / (self.cfg.env.num_control_steps_per_env_step
+            * self.cfg.sim.dt)
+        )
         self.debug_viz = False
 
         self.sim_params = sim_params
@@ -146,6 +150,7 @@ class AerialRobotWithObstacles(BaseTask):
             d_pssm_blocks=self.hidden_dim,
             num_pssm_blocks=4,
             d_ssm=100,
+            sample_mean=True,
         )
 
         self.latent = torch.zeros(
@@ -221,6 +226,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.min_depth_value = 0
 
         self.ones = torch.ones_like(self.reset_buf, device=self.reset_buf.device)
+        self.zeros = torch.zeros_like(self.reset_buf, device=self.reset_buf.device)
 
         if self.cfg.env.enable_onboard_cameras:
             self.full_camera_array = torch.zeros(
@@ -462,9 +468,9 @@ class AerialRobotWithObstacles(BaseTask):
             self.check_collisions()
 
         self.compute_reward()
-        self.prev_distances_to_target[:] = self.prev_distances_to_target
+        self.prev_distances_to_target[:] = self.distances_to_target
 
-        self.reset_buf = torch.where(self.collisions > 0, self.ones, self.reset_buf)
+        self.reset_buf = torch.where(self.collisions > 0, self.ones, self.zeros)
         self.reset_buf = torch.where(
             self.progress_buf >= self.max_episode_length - 1, self.ones, self.reset_buf
         )
@@ -483,7 +489,6 @@ class AerialRobotWithObstacles(BaseTask):
         )
         self.latent = self.latent.squeeze()
         self.hidden = self.hidden.squeeze()
-
         self.S4WM.reset_cache(reset_env_ids)
         self.hidden[reset_env_ids] = 0
 
@@ -573,7 +578,6 @@ class AerialRobotWithObstacles(BaseTask):
 
         # Zero progress and reset buffers
         self.progress_buf[env_ids] = 0
-        self.reset_buf[env_ids] = 0
         self.hidden[env_ids] = 0
 
     def pre_physics_step(self, _actions):
@@ -790,32 +794,30 @@ def compute_quadcopter_reward(
 
     ## The reward function set here is arbitrary and the user is encouraged to modify this as per their need to achieve collision avoidance.
 
-    # r1 = exponential_reward_function(5.0, 3.0, distances_to_goal)
-    # r2 = exponential_reward_function(5.0, 0.5, distances_to_goal)
-    # # r3 = (prev_distances_to_goal - distances_to_goal) * 10
-    # r4 = (20 - distances_to_goal) / 20
+    r1 = exponential_reward_function(5.0, 3.5, distances_to_goal)
+    r2 = exponential_reward_function(5.0, 0.5, distances_to_goal)
+    # r3 = (prev_distances_to_goal - distances_to_goal) * 10
+    r4 = (20 - distances_to_goal) / 20
 
-    # rewards = r1 + r2 + r4
+    rewards = r1 + r2 + r4
 
-    # x_absolute_penalty = exponential_penalty_function(0.8, 2.5, action_input[:, 0])
-    # y_absolute_penalty = exponential_penalty_function(0.8, 2.5, action_input[:, 1])
-    # z_absolute_penalty = exponential_penalty_function(1.0, 2.5, action_input[:, 2])
-    # yawrate_absolute_penalty = exponential_penalty_function(
-    #     1.0, 2.5, action_input[:, 3]
-    # )
+    x_absolute_penalty = exponential_penalty_function(1.0, 2.5, action_input[:, 0])
+    y_absolute_penalty = exponential_penalty_function(1.0, 2.5, action_input[:, 1])
+    z_absolute_penalty = exponential_penalty_function(1.0, 2.5, action_input[:, 2])
+    yawrate_absolute_penalty = exponential_penalty_function(
+        2.5, 0.5, action_input[:, 3]
+    )
 
-    # ones = torch.ones_like(collisions, device=collisions.device, dtype=torch.float32)
-    # zeros = torch.zeros_like(collisions, device=collisions.device, dtype=torch.float32)
-    # p1 = (
-    #     x_absolute_penalty
-    #     + y_absolute_penalty
-    #     + z_absolute_penalty
-    #     + yawrate_absolute_penalty
-    # )
-    # p2 = -100 * torch.where(collisions > 0, ones, zeros)
+    ones = torch.ones_like(collisions, device=collisions.device, dtype=torch.float32)
+    zeros = torch.zeros_like(collisions, device=collisions.device, dtype=torch.float32)
+    p1 = (
+        x_absolute_penalty
+        + y_absolute_penalty
+        + z_absolute_penalty
+        + yawrate_absolute_penalty
+    )
+    p2 = -150 * torch.where(collisions > 0, ones, zeros)
 
-    # penalties = p1 + p2
-    # penalties = p2
-    reward = distances_to_goal
+    penalties = p1 + p2
 
-    return distances_to_goal
+    return rewards + penalties

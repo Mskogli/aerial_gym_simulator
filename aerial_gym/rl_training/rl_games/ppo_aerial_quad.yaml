@@ -67,6 +67,7 @@ params:
     use_smooth_clamp: False
 
     player:
-      render: True
+      render: False
       deterministic: True
       games_num: 100000
+      use_vecenv: True

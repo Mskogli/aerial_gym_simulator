@@ -347,7 +347,7 @@ class AssetManager:
         self, states: torch.tensor, counter: float
     ) -> Tuple[torch.tensor, ...]:  # 2 Tuple
         n = self.num_dynamic_assets // 3
-        self.t = torch.tensor([counter / 300.0], device=self.device)
+        self.t = torch.tensor([counter / 150.0], device=self.device)
 
         sin, cos = torch.sin(self.t), torch.cos(self.t)
 
