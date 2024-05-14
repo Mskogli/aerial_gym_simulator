@@ -43,8 +43,7 @@ class AerialRobotWithObstacles(BaseTask):
 
         self.max_episode_length = int(
             self.cfg.env.episode_length_s
-            / (self.cfg.env.num_control_steps_per_env_step
-            * self.cfg.sim.dt)
+            / (self.cfg.env.num_control_steps_per_env_step * self.cfg.sim.dt)
         )
         self.debug_viz = False
 
@@ -94,6 +93,7 @@ class AerialRobotWithObstacles(BaseTask):
         )[:, 0]
 
         self.collisions = torch.zeros(self.num_envs, device=self.device)
+        self.timeouts = torch.zeros(self.num_envs, device=self.device)
 
         self.initial_root_states = self.root_states.clone()
         self.counter = 0
@@ -145,11 +145,11 @@ class AerialRobotWithObstacles(BaseTask):
 
         self.S4WM = S4WMTorchWrapper(
             self.num_envs,
-            "/home/mathias/dev/structured-state-space-wm/s4wm/nn/checkpoints/depth_dataset/d_model=512-lr=0.0003-bsz=8-latent_type=Gaussian/checkpoint_61",
+            "/home/mathias/dev/rl_checkpoints/gaussian_128",
             d_latent=self.latent_dim * 2,
             d_pssm_blocks=self.hidden_dim,
-            num_pssm_blocks=4,
-            d_ssm=100,
+            num_pssm_blocks=3,
+            d_ssm=128,
             sample_mean=True,
         )
 
@@ -218,6 +218,17 @@ class AerialRobotWithObstacles(BaseTask):
         self.goal_spawning_pos_max = torch.tensor(
             self.cfg.goal_spawning_config.max_position_ratio, device=self.device
         ).expand(self.num_envs, -1)
+
+        self.robot_spawning_offset = torch.tensor(
+            self.cfg.robot_spawning_config.offset, device=self.device
+        ).expand(self.num_envs, -1)
+        self.robot_spawning_pos_min = torch.tensor(
+            self.cfg.robot_spawning_config.min_position_ratio, device=self.device
+        ).expand(self.num_envs, -1)
+        self.robot_spawning_pos_max = torch.tensor(
+            self.cfg.robot_spawning_config.max_position_ratio, device=self.device
+        ).expand(self.num_envs, -1)
+
         self.zeros_3d = torch.zeros(
             (self.num_envs, 3), device=self.device, requires_grad=False
         )
@@ -466,14 +477,15 @@ class AerialRobotWithObstacles(BaseTask):
             self.gym.fetch_results(self.sim, True)
             self.progress_buf += 1
             self.check_collisions()
+            self.timeouts = torch.where(
+                self.progress_buf >= self.max_episode_length - 1, self.ones, self.zeros
+            )
 
         self.compute_reward()
         self.prev_distances_to_target[:] = self.distances_to_target
 
         self.reset_buf = torch.where(self.collisions > 0, self.ones, self.zeros)
-        self.reset_buf = torch.where(
-            self.progress_buf >= self.max_episode_length - 1, self.ones, self.reset_buf
-        )
+        self.reset_buf = torch.where(self.timeouts > 0, self.ones, self.reset_buf)
 
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
@@ -521,24 +533,29 @@ class AerialRobotWithObstacles(BaseTask):
         self.env_asset_root_states[env_ids, :, 7:13] = 0.0
 
         # get environment lower and upper bounds
-        self.env_lower_bound[env_ids] = self.env_asset_manager.env_lower_bound.diagonal(
-            dim1=-2, dim2=-1
-        )
-        self.env_upper_bound[env_ids] = self.env_asset_manager.env_upper_bound.diagonal(
-            dim1=-2, dim2=-1
-        )
+        self.env_lower_bound[env_ids] = self.env_asset_manager.env_lower_bound[env_ids]
+        self.env_upper_bound[env_ids] = self.env_asset_manager.env_upper_bound[env_ids]
 
         # Randomize drone starting positions
         drone_pos_rand_sample = torch.rand((num_resets, 3), device=self.device)
-        drone_positions = (
-            self.env_upper_bound[env_ids] - self.env_lower_bound[env_ids] - 0.50
-        ) * drone_pos_rand_sample + (self.env_lower_bound[env_ids] + 0.25)
-        self.root_states[env_ids, 0:3] = drone_positions
-        self.root_states[env_ids, 7:10] = 0.2 * torch_rand_float(
-            -1.0, 1.0, (num_resets, 3), self.device
+        drone_spawning_min_bounds = (
+            self.env_lower_bound[env_ids] + self.robot_spawning_offset[env_ids]
         )
-        self.root_states[env_ids, 10:13] = 0.2 * torch_rand_float(
-            -1.0, 1.0, (num_resets, 3), self.device
+        drone_spawning_max_bounds = (
+            self.env_upper_bound[env_ids] - self.robot_spawning_offset[env_ids]
+        )
+        drone_spawning_ratio_in_env_bound = (
+            drone_pos_rand_sample
+            * (
+                self.robot_spawning_pos_max[env_ids]
+                - self.robot_spawning_pos_min[env_ids]
+            )
+            + self.robot_spawning_pos_min[env_ids]
+        )
+        drone_positions = (
+            drone_spawning_min_bounds
+            + drone_spawning_ratio_in_env_bound
+            * (drone_spawning_max_bounds - drone_spawning_min_bounds)
         )
 
         # Randomize starting orientation
@@ -546,10 +563,19 @@ class AerialRobotWithObstacles(BaseTask):
         robot_euler_angles[:, 0] *= 3.1415 / 6.0
         robot_euler_angles[:, 1] *= 3.1415 / 6.0
         robot_euler_angles[:, 2] *= 3.1415
+
+        self.root_states[env_ids, 0:3] = drone_positions
         self.root_states[env_ids, 3:7] = quat_from_euler_xyz(
             robot_euler_angles[..., 0],
             robot_euler_angles[..., 1],
             robot_euler_angles[..., 2],
+        )
+
+        self.root_states[env_ids, 7:10] = 0.3 * torch_rand_float(
+            -1.0, 1.0, (num_resets, 3), self.device
+        )
+        self.root_states[env_ids, 10:13] = 0.3 * torch_rand_float(
+            -1.0, 1.0, (num_resets, 3), self.device
         )
 
         self.gym.set_actor_root_state_tensor(self.sim, self.root_tensor)
@@ -578,6 +604,7 @@ class AerialRobotWithObstacles(BaseTask):
 
         # Zero progress and reset buffers
         self.progress_buf[env_ids] = 0
+        self.timeouts[env_ids] = 0
         self.hidden[env_ids] = 0
 
     def pre_physics_step(self, _actions):
@@ -731,6 +758,8 @@ class AerialRobotWithObstacles(BaseTask):
             self.prev_distances_to_target,
             self.action_input,
             self.collisions,
+            self.timeouts,
+            self.progress_buf,
         )
 
 
@@ -789,23 +818,26 @@ def compute_quadcopter_reward(
     prev_distances_to_goal,
     action_input,
     collisions,
+    timeouts,
+    progress_buf,
 ):
-    # type: (Tensor, Tensor, Tensor, Tensor) -> Tensor
+    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor) -> Tensor
 
     ## The reward function set here is arbitrary and the user is encouraged to modify this as per their need to achieve collision avoidance.
+    ones = torch.ones_like(collisions, device=collisions.device, dtype=torch.float32)
+    zeros = torch.zeros_like(collisions, device=collisions.device, dtype=torch.float32)
 
     r1 = exponential_reward_function(5.0, 3.5, distances_to_goal)
-    r2 = exponential_reward_function(5.0, 0.5, distances_to_goal)
-    # r3 = (prev_distances_to_goal - distances_to_goal) * 10
-    r4 = (20 - distances_to_goal) / 20
+    r2 = exponential_reward_function(2.5, 0.75, distances_to_goal)
+    r3 = 3 * ((20 - distances_to_goal) / 20)
 
-    rewards = r1 + r2 + r4
+    rewards = r1 + r2 + r3
 
-    x_absolute_penalty = exponential_penalty_function(1.0, 2.5, action_input[:, 0])
-    y_absolute_penalty = exponential_penalty_function(1.0, 2.5, action_input[:, 1])
-    z_absolute_penalty = exponential_penalty_function(1.0, 2.5, action_input[:, 2])
+    x_absolute_penalty = exponential_penalty_function(1.8, 2.9, action_input[:, 0])
+    y_absolute_penalty = exponential_penalty_function(3.0, 1.0, action_input[:, 1])
+    z_absolute_penalty = exponential_penalty_function(3.0, 1.0, action_input[:, 2])
     yawrate_absolute_penalty = exponential_penalty_function(
-        2.5, 0.5, action_input[:, 3]
+        0.0, 2.0, action_input[:, 3]
     )
 
     ones = torch.ones_like(collisions, device=collisions.device, dtype=torch.float32)
@@ -816,8 +848,8 @@ def compute_quadcopter_reward(
         + z_absolute_penalty
         + yawrate_absolute_penalty
     )
-    p2 = -150 * torch.where(collisions > 0, ones, zeros)
 
+    p2 = -700 * torch.where(collisions > 0, ones, zeros)
     penalties = p1 + p2
 
     return rewards + penalties

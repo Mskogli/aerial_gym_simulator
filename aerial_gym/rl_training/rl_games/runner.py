@@ -167,7 +167,7 @@ def get_args():
         {
             "name": "--wandb-project-name",
             "type": str,
-            "default": "rl_games",
+            "default": "S4RL",
             "help": "the wandb's project name",
         },
         {

@@ -23,7 +23,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         get_privileged_obs = True  # if True the states of all entitites in the environment will be returned as privileged observations, otherwise None will be returned
         num_actions = 4
         env_spacing = 5.0  # not used with heightfields/trimeshes
-        episode_length_s = 14  # episode length in seconds
+        episode_length_s = 20  # episode length in seconds
         num_control_steps_per_env_step = (
             10  # number of control & physics steps between camera renders
         )
@@ -34,7 +34,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
 
         # RL stuff
         prediction_horizon = 1
-        latent_dim = 64
+        latent_dim = 128
         hidden_dim = 512
         num_observations = 13 + latent_dim + hidden_dim
 
@@ -419,15 +419,28 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         env_upper_bound_min = [5.0, 5.0, 5.0]  # upper bound for the environment space
         env_upper_bound_max = [5.0, 5.0, 5.0]  # upper bound for the environment space
 
-    class goal_spawning_config:
-        offset = [0.8, 0.8, 0.8]  # offset from each wall
+    class robot_spawning_config:
+        offset = [0.5, 0.5, 0.5]  # offset from each wall
         min_position_ratio = [
-            0.85,
+            0.1,
             0.1,
             0.1,
         ]  # min position as a ratio of the bounds after offset
         max_position_ratio = [
+            0.9,
+            0.9,
+            0.9,
+        ]  # max position as a ratio of the bounds after offset
+
+    class goal_spawning_config:
+        offset = [0.3, 0.3, 0.5]  # offset from each wall
+        min_position_ratio = [
+            0.0,
+            0.0,
+            0.0,
+        ]  # min position as a ratio of the bounds after offset
+        max_position_ratio = [
             1.0,
-            0.9,
-            0.9,
+            1.0,
+            1.0,
         ]  # max position as a ratio of the bounds after offset
