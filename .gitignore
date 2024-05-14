@@ -5,6 +5,6 @@ runs/
 *.tfevents*
 *.egg-info/
 resources/
-aerial_gym/rl_training/wandb/
+aerial_gym/rl_training/rl_games/wandb/
 */wandb
 */__pycache__/
