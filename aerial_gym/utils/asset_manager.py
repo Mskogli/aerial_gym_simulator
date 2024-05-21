@@ -317,6 +317,8 @@ class AssetManager:
             + self.env_bound_diff.unsqueeze(1) * pos_ratio_euler_asbolute[:, :, :3]
         )
 
+        # self.asset_pose_tensor[:, -1, :3] = 0
+
         self.asset_pose_tensor[:, :, 3:6] = pos_ratio_euler_asbolute[:, :, 3:6]
 
         self.asset_pose_tensor = torch.where(

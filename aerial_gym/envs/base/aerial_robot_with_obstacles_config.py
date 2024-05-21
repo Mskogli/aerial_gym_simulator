@@ -23,14 +23,14 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         get_privileged_obs = True  # if True the states of all entitites in the environment will be returned as privileged observations, otherwise None will be returned
         num_actions = 4
         env_spacing = 5.0  # not used with heightfields/trimeshes
-        episode_length_s = 20  # episode length in seconds
+        episode_length_s = 40  # episode length in seconds
         num_control_steps_per_env_step = (
             10  # number of control & physics steps between camera renders
         )
         enable_onboard_cameras = True  # enable onboard cameras
         reset_on_collision = True  # reset environment when contact force on quadrotor is above a threshold
         create_ground_plane = True  # create a ground plane
-        dynamic_assets = True
+        dynamic_assets = False
 
         # RL stuff
         prediction_horizon = 1
@@ -98,7 +98,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         ]  # scale the input to the controller from -1 to 1 for each dimension
 
     class robot_asset:
-        file = "{AERIAL_GYM_ROOT_DIR}/resources/robots/quad/model.urdf"
+        file = "{AERIAL_GYM_ROOT_DIR}/resources/robots/quad/model_with_mesh.urdf"
         name = "aerial_robot"  # actor name
         base_link_name = "base_link"
         disable_gravity = False
@@ -166,7 +166,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [170, 66, 66]
 
     class tree_asset_params(asset_state_params):
-        num_assets = 10
+        num_assets = 15
         num_dynamic_assets = 0
 
         collision_mask = 1  # objects with the same collision mask will not collide
@@ -198,11 +198,11 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [70, 200, 100]
 
     class object_asset_params(asset_state_params):
-        num_assets = 40
-        num_dynamic_assets = 15
+        num_assets = 60
+        num_dynamic_assets = 0
 
-        max_position_ratio = [0.95, 0.95, 0.95]  # min position as a ratio of the bounds
-        min_position_ratio = [0.05, 0.05, 0.05]  # max position as a ratio of the bounds
+        max_position_ratio = [0.95, 0.85, 0.95]  # min position as a ratio of the bounds
+        min_position_ratio = [0.05, 0.15, 0.05]  # max position as a ratio of the bounds
 
         specified_position = [
             -1000.0,
@@ -224,7 +224,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         set_semantic_mask_per_link = False
         semantic_id = OBJECT_SEMANTIC_ID
 
-        # color = [80,255,100]
+        color = None
 
     class left_wall(asset_state_params):
         num_assets = 1
@@ -414,29 +414,37 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
             "bottom_wall": False,
         }
 
-        env_lower_bound_min = [-5.0, -5.0, 0.0]  # lower bound for the environment space
-        env_lower_bound_max = [-5.0, -5.0, 0.0]  # lower bound for the environment space
-        env_upper_bound_min = [5.0, 5.0, 5.0]  # upper bound for the environment space
-        env_upper_bound_max = [5.0, 5.0, 5.0]  # upper bound for the environment space
+        env_lower_bound_min = [
+            -5.0,
+            -10.0,
+            0.0,
+        ]  # lower bound for the environment space
+        env_lower_bound_max = [
+            -5.0,
+            -10.0,
+            0.0,
+        ]  # lower bound for the environment space
+        env_upper_bound_min = [5.0, 15.0, 5.0]  # upper bound for the environment space
+        env_upper_bound_max = [5.0, 15.0, 5.0]  # upper bound for the environment space
 
     class robot_spawning_config:
-        offset = [0.5, 0.5, 0.5]  # offset from each wall
+        offset = [0.5, 1.5, 0.5]  # offset from each wall
         min_position_ratio = [
-            0.1,
-            0.1,
-            0.1,
+            0.0,
+            0.0,
+            0.0,
         ]  # min position as a ratio of the bounds after offset
         max_position_ratio = [
-            0.9,
-            0.9,
-            0.9,
+            1.0,
+            0.0,
+            1.0,
         ]  # max position as a ratio of the bounds after offset
 
     class goal_spawning_config:
-        offset = [0.3, 0.3, 0.5]  # offset from each wall
+        offset = [0.3, 1.5, 0.5]  # offset from each wall
         min_position_ratio = [
             0.0,
-            0.0,
+            1.0,
             0.0,
         ]  # min position as a ratio of the bounds after offset
         max_position_ratio = [

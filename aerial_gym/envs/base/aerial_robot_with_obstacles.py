@@ -81,6 +81,8 @@ class AerialRobotWithObstacles(BaseTask):
         self.root_linvels = self.root_states[..., 7:10]
         self.root_angvels = self.root_states[..., 10:13]
 
+        self.prev_root_positions = torch.zeros_like(self.root_positions)
+
         self.env_asset_root_states = self.vec_root_tensor[:, 1:, :]
 
         self.privileged_obs_buf = None
@@ -443,7 +445,7 @@ class AerialRobotWithObstacles(BaseTask):
                         )
 
                 if color is None:
-                    color = np.random.randint(low=50, high=200, size=3)
+                    color = np.random.randint(low=155, high=190, size=3)
 
                 self.gym.set_rigid_body_color(
                     env_handle,
@@ -468,6 +470,7 @@ class AerialRobotWithObstacles(BaseTask):
 
     def step(self, actions):
         # step physics and render each frame
+        self.prev_root_positions = self.root_positions.detach().clone()
         for _ in range(self.prediction_horizon):
             for i in range(self.cfg.env.num_control_steps_per_env_step):
                 self.pre_physics_step(actions)
@@ -486,6 +489,9 @@ class AerialRobotWithObstacles(BaseTask):
 
         self.reset_buf = torch.where(self.collisions > 0, self.ones, self.zeros)
         self.reset_buf = torch.where(self.timeouts > 0, self.ones, self.reset_buf)
+        self.reset_buf = torch.where(
+            self.prev_distances_to_target < 0.2, self.ones, self.reset_buf
+        )
 
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
@@ -493,6 +499,16 @@ class AerialRobotWithObstacles(BaseTask):
 
         self.render(sync_frame_time=False)
         self.render_cameras()
+
+        line = [
+            self.prev_root_positions[0][0].item(),
+            self.prev_root_positions[0][1].item(),
+            self.prev_root_positions[0][2].item(),
+            self.root_positions[0][0].item(),
+            self.root_positions[0][1].item(),
+            self.root_positions[0][2].item(),
+        ]
+        self.gym.add_lines(self.viewer, self.envs[0], 1, line, [1, 0, 0])
 
         self.latent, self.hidden = self.S4WM.forward(
             self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
@@ -560,9 +576,9 @@ class AerialRobotWithObstacles(BaseTask):
 
         # Randomize starting orientation
         robot_euler_angles = torch_rand_float(-1.0, 1.0, (num_resets, 3), self.device)
-        robot_euler_angles[:, 0] *= 3.1415 / 6.0
-        robot_euler_angles[:, 1] *= 3.1415 / 6.0
-        robot_euler_angles[:, 2] *= 3.1415
+        robot_euler_angles[:, 0] = 0
+        robot_euler_angles[:, 1] = 0
+        robot_euler_angles[:, 2] = 90
 
         self.root_states[env_ids, 0:3] = drone_positions
         self.root_states[env_ids, 3:7] = quat_from_euler_xyz(
@@ -571,12 +587,14 @@ class AerialRobotWithObstacles(BaseTask):
             robot_euler_angles[..., 2],
         )
 
-        self.root_states[env_ids, 7:10] = 0.3 * torch_rand_float(
-            -1.0, 1.0, (num_resets, 3), self.device
-        )
-        self.root_states[env_ids, 10:13] = 0.3 * torch_rand_float(
-            -1.0, 1.0, (num_resets, 3), self.device
-        )
+        self.root_states[env_ids, 7:13] = 0
+        self.root_states[env_ids, 6] = 1
+        # self.root_states[env_ids, 7:10] = 0.3 * torch_rand_float(
+        #     -1.0, 1.0, (num_resets, 3), self.device
+        # )
+        # self.root_states[env_ids, 10:13] = 0.3 * torch_rand_float(
+        #     -1.0, 1.0, (num_resets, 3), self.device
+        # )
 
         self.gym.set_actor_root_state_tensor(self.sim, self.root_tensor)
 
@@ -602,10 +620,30 @@ class AerialRobotWithObstacles(BaseTask):
             * (goal_spawning_max_bounds - goal_spawning_min_bounds)
         )
 
+        center_x = self.goal_positions[0][0].item()
+        center_y = self.goal_positions[0][1].item()
+        center_z = self.goal_positions[0][2].item()
+
+        center = (center_x, center_y, center_z)
+
         # Zero progress and reset buffers
         self.progress_buf[env_ids] = 0
         self.timeouts[env_ids] = 0
         self.hidden[env_ids] = 0
+        self.gym.clear_lines(self.viewer)
+
+        lines = generate_wireframe_sphere_lines(center, 0.13, 40)
+
+        for line in lines:
+            spehere_line = [
+                line[0][0],
+                line[0][1],
+                line[0][2],
+                line[1][0],
+                line[1][1],
+                line[1][2],
+            ]
+            self.gym.add_lines(self.viewer, self.envs[0], 1, spehere_line, [1, 0, 0])
 
     def pre_physics_step(self, _actions):
         # resets
@@ -689,7 +727,7 @@ class AerialRobotWithObstacles(BaseTask):
         zeros = torch.zeros((self.num_envs), device=self.device)
         self.collisions[:] = 0
         self.collisions = torch.where(
-            torch.norm(self.contact_forces, dim=1) > 0.1, ones, zeros
+            torch.norm(self.contact_forces, dim=1) > 0, ones, zeros
         )
 
     def dump_images(self):
@@ -761,6 +799,37 @@ class AerialRobotWithObstacles(BaseTask):
             self.timeouts,
             self.progress_buf,
         )
+
+
+def generate_wireframe_sphere_lines(center, radius, num_segments):
+    lines = []
+    # Longitude lines
+    for phi in np.linspace(-0.5 * np.pi, 0.5 * np.pi, num_segments):
+        points = []
+        for theta in np.linspace(0, 2 * np.pi, num_segments, endpoint=False):
+            x = center[0] + radius * np.cos(phi) * np.cos(theta)
+            y = center[1] + radius * np.cos(phi) * np.sin(theta)
+            z = center[2] + radius * np.sin(phi)
+            points.append((x, y, z))
+        # Add lines for current circle
+        for i in range(len(points)):
+            next_index = (i + 1) % num_segments  # Ensures wrapping around
+            lines.append((points[i], points[next_index]))
+
+    # Latitude lines
+    for theta in np.linspace(0, 2 * np.pi, num_segments):
+        points = []
+        for phi in np.linspace(-0.5 * np.pi, 0.5 * np.pi, num_segments, endpoint=False):
+            x = center[0] + radius * np.sin(phi) * np.cos(theta)
+            y = center[1] + radius * np.sin(phi) * np.sin(theta)
+            z = center[2] + radius * np.cos(phi)
+            points.append((x, y, z))
+        # Add lines for current circle
+        for i in range(len(points)):
+            next_index = (i + 1) % num_segments  # Ensures wrapping around
+            lines.append((points[i], points[next_index]))
+
+    return lines
 
 
 ###=========================jit functions=========================###
