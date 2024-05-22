@@ -478,7 +478,7 @@ class AerialRobotWithObstacles(BaseTask):
 
     def step(self, actions):
         # step physics and render each frame
-        actions = torch.zeros_like(actions)
+        # actions = torch.zeros_like(actions)
         self.prev_root_positions = self.root_positions.detach().clone()
         for _ in range(self.prediction_horizon):
             for i in range(self.cfg.env.num_control_steps_per_env_step):
@@ -644,7 +644,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.timeouts[env_ids] = 0
         self.hidden[env_ids] = 0
         self.reset_buf[env_ids] = 0
-        self.gym.clear_lines(self.viewer)
+        # self.gym.clear_lines(self.viewer)
         self.prev_root_positions[:] = drone_positions
 
         lines = generate_wireframe_sphere_lines(center, 0.13, 40)
@@ -658,17 +658,11 @@ class AerialRobotWithObstacles(BaseTask):
                 line[1][1],
                 line[1][2],
             ]
-            self.gym.add_lines(self.viewer, self.envs[0], 1, spehere_line, [1, 1, 0])
+            self.gym.add_lines(self.viewer, self.envs[0], 1, spehere_line, [1, 0, 0])
 
         for line in self.traj:
             color = [0.9, 0.0, 0.0] if self.collisions[0] else [0.0, 0.9, 0.0]
             self.gym.add_lines(self.viewer, self.envs[0], 1, line, color)
-
-        gsz_line = [-5.0, 8.0, 2.5, 5.0, 8.0, 2.5]
-        dsz_line = [-5.0, -8.0, 2.5, 5.0, -8.0, 2.5]
-
-        self.gym.add_lines(self.viewer, self.envs[0], 1, gsz_line, [0, 0, 0])
-        self.gym.add_lines(self.viewer, self.envs[0], 1, dsz_line, [0, 0, 0])
 
         if self.collisions[0]:
             self.crash += 1

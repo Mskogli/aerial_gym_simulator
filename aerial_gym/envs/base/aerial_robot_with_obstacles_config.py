@@ -40,7 +40,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
 
     class viewer:
         ref_env = 0
-        pos = [-5, -5, 4]  # [m]
+        pos = [-0.00000001, 0, 20]  # [m]
         lookat = [0, 0, 0]  # [m]
 
     class sim:
@@ -416,19 +416,19 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
 
         env_lower_bound_min = [
             -5.0,
-            -10.0,
+            -15.0,
             0.0,
         ]  # lower bound for the environment space
         env_lower_bound_max = [
             -5.0,
-            -10.0,
+            -15.0,
             0.0,
         ]  # lower bound for the environment space
-        env_upper_bound_min = [5.0, 10.0, 5.0]  # upper bound for the environment space
-        env_upper_bound_max = [5.0, 10.0, 5.0]  # upper bound for the environment space
+        env_upper_bound_min = [5.0, 15.0, 5.0]  # upper bound for the environment space
+        env_upper_bound_max = [5.0, 15.0, 5.0]  # upper bound for the environment space
 
     class robot_spawning_config:
-        offset = [0.5, 1.5, 0.5]  # offset from each wall
+        offset = [1.0, 1.0, 0.5]  # offset from each wall
         min_position_ratio = [
             0.0,
             0.0,
@@ -441,14 +441,14 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         ]  # max position as a ratio of the bounds after offset
 
     class goal_spawning_config:
-        offset = [0.5, 1.5, 0.5]  # offset from each wall
+        offset = [1.0, 1.0, 0.5]  # offset from each wall
         min_position_ratio = [
-            0.0,
+            0.5,
             1.0,
-            0.0,
+            0.5,
         ]  # min position as a ratio of the bounds after offset
         max_position_ratio = [
+            0.5,
             1.0,
-            1.0,
-            1.0,
+            0.5,
         ]  # max position as a ratio of the bounds after offset
