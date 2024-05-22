@@ -69,5 +69,5 @@ params:
     player:
       render: False
       deterministic: True
-      games_num: 100000
+      games_num: 100
       use_vecenv: True

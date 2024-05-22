@@ -137,6 +137,9 @@ class AerialRobotWithObstacles(BaseTask):
             (self.num_envs, 3), dtype=torch.float32, device=self.device
         )
 
+        self.successful = 0
+        self.crash = 0
+
         # S4RL
 
         self.latent_dim = cfg.env.latent_dim
@@ -211,6 +214,11 @@ class AerialRobotWithObstacles(BaseTask):
             device=self.device,
             requires_grad=False,
         )
+
+        self.num_rollouts = 0
+        self.traj = []
+        self.collided = False
+
         self.goal_spawning_offset = torch.tensor(
             self.cfg.goal_spawning_config.offset, device=self.device
         ).expand(self.num_envs, -1)
@@ -470,6 +478,7 @@ class AerialRobotWithObstacles(BaseTask):
 
     def step(self, actions):
         # step physics and render each frame
+        actions = torch.zeros_like(actions)
         self.prev_root_positions = self.root_positions.detach().clone()
         for _ in range(self.prediction_horizon):
             for i in range(self.cfg.env.num_control_steps_per_env_step):
@@ -508,7 +517,8 @@ class AerialRobotWithObstacles(BaseTask):
             self.root_positions[0][1].item(),
             self.root_positions[0][2].item(),
         ]
-        self.gym.add_lines(self.viewer, self.envs[0], 1, line, [1, 0, 0])
+        self.traj.append(line)
+        # self.gym.add_lines(self.viewer, self.envs[0], 1, line, [1, 0, 0])
 
         self.latent, self.hidden = self.S4WM.forward(
             self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
@@ -536,7 +546,10 @@ class AerialRobotWithObstacles(BaseTask):
     def reset_idx(self, env_ids):
         num_resets = len(env_ids)
 
-        self.env_asset_manager.randomize_pose(reset_envs=env_ids)
+        if self.num_rollouts == 0:
+            self.env_asset_manager.randomize_pose(reset_envs=env_ids)
+
+        self.num_rollouts += 1
 
         self.env_asset_root_states[env_ids, :, 0:3] = (
             self.env_asset_manager.asset_pose_tensor[env_ids, :, 0:3]
@@ -630,7 +643,9 @@ class AerialRobotWithObstacles(BaseTask):
         self.progress_buf[env_ids] = 0
         self.timeouts[env_ids] = 0
         self.hidden[env_ids] = 0
+        self.reset_buf[env_ids] = 0
         self.gym.clear_lines(self.viewer)
+        self.prev_root_positions[:] = drone_positions
 
         lines = generate_wireframe_sphere_lines(center, 0.13, 40)
 
@@ -643,7 +658,32 @@ class AerialRobotWithObstacles(BaseTask):
                 line[1][1],
                 line[1][2],
             ]
-            self.gym.add_lines(self.viewer, self.envs[0], 1, spehere_line, [1, 0, 0])
+            self.gym.add_lines(self.viewer, self.envs[0], 1, spehere_line, [1, 1, 0])
+
+        for line in self.traj:
+            color = [0.9, 0.0, 0.0] if self.collisions[0] else [0.0, 0.9, 0.0]
+            self.gym.add_lines(self.viewer, self.envs[0], 1, line, color)
+
+        gsz_line = [-5.0, 8.0, 2.5, 5.0, 8.0, 2.5]
+        dsz_line = [-5.0, -8.0, 2.5, 5.0, -8.0, 2.5]
+
+        self.gym.add_lines(self.viewer, self.envs[0], 1, gsz_line, [0, 0, 0])
+        self.gym.add_lines(self.viewer, self.envs[0], 1, dsz_line, [0, 0, 0])
+
+        if self.collisions[0]:
+            self.crash += 1
+        else:
+            self.successful += 1
+
+        if self.num_rollouts == 100:
+            print("Crash", self.crash)
+            print("success", self.successful)
+            time.sleep(10000)
+
+        self.collisions[env_ids] = 0
+        print(self.successful)
+        print(self.crash)
+        self.traj = []
 
     def pre_physics_step(self, _actions):
         # resets
@@ -727,7 +767,7 @@ class AerialRobotWithObstacles(BaseTask):
         zeros = torch.zeros((self.num_envs), device=self.device)
         self.collisions[:] = 0
         self.collisions = torch.where(
-            torch.norm(self.contact_forces, dim=1) > 0, ones, zeros
+            torch.norm(self.contact_forces, dim=1) > 0.1, ones, zeros
         )
 
     def dump_images(self):
