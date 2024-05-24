@@ -483,17 +483,6 @@ class AerialRobotWithObstacles(BaseTask):
 
     def step(self, actions):
         # step physics and render each frame
-        if self.goals == 8 or self.left_env_bounds:
-            actions = torch.zeros_like(actions)
-
-        self.applied_control_actions.append(
-            [
-                actions[0][0].item(),
-                actions[0][1].item(),
-                actions[0][2].item(),
-                actions[0][3].item(),
-            ]
-        )
         self.prev_root_positions = self.root_positions.detach().clone()
         for _ in range(self.prediction_horizon):
             for i in range(self.cfg.env.num_control_steps_per_env_step):
@@ -513,25 +502,12 @@ class AerialRobotWithObstacles(BaseTask):
 
         self.reset_buf = torch.where(self.collisions > 0, self.ones, self.zeros)
         self.reset_buf = torch.where(self.timeouts > 0, self.ones, self.reset_buf)
-        # self.reset_buf = torch.where(
-        #     self.prev_distances_to_target < 0.2, self.ones, self.reset_buf
-        # )
+        self.reset_buf = torch.where(
+            self.prev_distances_to_target < 0.2, self.ones, self.reset_buf
+        )
 
-        if self.prev_distances_to_target < 1.0 and self.prev_distances_to_target > 0:
-            if self.goal_positions[0][1] == 14:
-                self.goal_positions[0][1] = -14
-            else:
-                self.goal_positions[0][1] = 14
-            # self.S4WM.reset_cache(torch.tensor([0], device=self.device))
-            # self.hidden[0] = 0
-            self.goals += 1
-
-        if self.goals == 8:
-            self.reset_buf = torch.ones_like(self.reset_buf)
-
-        if self.root_positions[0][2] > 12:
-            self.left_env_bounds = True
-            self.reset_buf = torch.ones_like(self.reset_buf)
+        if self.progress_buf[0] % 200 == 0:
+            self.S4WM.reset_cache(torch.tensor([0], device=self.device))
 
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
@@ -679,9 +655,6 @@ class AerialRobotWithObstacles(BaseTask):
         self.prev_root_positions[:] = drone_positions
 
         lines = generate_wireframe_sphere_lines(center, 0.13, 40)
-        center_2 = (center_x, -center_y, center_z)
-        lines_2 = generate_wireframe_sphere_lines(center_2, 0.13, 40)
-        lines += lines_2
 
         for line in lines:
             spehere_line = [
@@ -695,11 +668,7 @@ class AerialRobotWithObstacles(BaseTask):
             self.gym.add_lines(self.viewer, self.envs[0], 1, spehere_line, [1, 0, 0])
 
         for line in self.traj:
-            color = (
-                [0.9, 0.0, 0.0]
-                if self.collisions[0] or self.left_env_bounds
-                else [0.0, 0.9, 0.0]
-            )
+            color = [0.9, 0.0, 0.0] if self.collisions[0] else [0.0, 0.9, 0.0]
             self.gym.add_lines(self.viewer, self.envs[0], 1, line, color)
 
         if self.collisions[0]:
@@ -707,13 +676,14 @@ class AerialRobotWithObstacles(BaseTask):
         else:
             self.successful += 1
 
-        if self.num_rollouts > 1:
-            with open("test.npy", "wb") as f:
-                np.save(f, np.array(self.applied_control_actions))
+        if self.num_rollouts == 102:
+            time.sleep(10000)
+
         self.applied_control_actions = []
 
         self.collisions[env_ids] = 0
 
+        print(self.num_rollouts)
         print(self.successful)
         print(self.crash)
         self.traj = []
