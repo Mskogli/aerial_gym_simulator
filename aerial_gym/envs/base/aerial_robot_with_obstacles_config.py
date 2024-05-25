@@ -22,7 +22,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         num_envs = 64
         get_privileged_obs = True  # if True the states of all entitites in the environment will be returned as privileged observations, otherwise None will be returned
         num_actions = 4
-        env_spacing = 5.0  # not used with heightfields/trimeshes
+        env_spacing = 16  # not used with heightfields/trimeshes
         episode_length_s = 250  # episode length in seconds
         num_control_steps_per_env_step = (
             10  # number of control & physics steps between camera renders
@@ -198,7 +198,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [70, 200, 100]
 
     class object_asset_params(asset_state_params):
-        num_assets = 60
+        num_assets = 40
         num_dynamic_assets = 0
 
         max_position_ratio = [0.95, 0.85, 0.95]  # min position as a ratio of the bounds
@@ -443,12 +443,12 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
     class goal_spawning_config:
         offset = [1.0, 1.0, 0.5]  # offset from each wall
         min_position_ratio = [
-            0.5,
+            0.0,
             1.0,
-            0.5,
+            0.0,
         ]  # min position as a ratio of the bounds after offset
         max_position_ratio = [
-            0.5,
             1.0,
-            0.5,
+            1.0,
+            1.0,
         ]  # max position as a ratio of the bounds after offset

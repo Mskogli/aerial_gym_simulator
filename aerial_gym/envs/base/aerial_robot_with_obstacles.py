@@ -22,6 +22,7 @@ from .aerial_robot_with_obstacles_config import AerialRobotWithObstaclesCfg
 from aerial_gym.envs.controllers.controller import Controller
 
 from aerial_gym.utils.asset_manager import AssetManager
+from aerial_gym.utils.episode_logger import EpisodeLogger
 
 from aerial_gym.utils.helpers import asset_class_to_AssetOptions
 
@@ -78,13 +79,19 @@ class AerialRobotWithObstacles(BaseTask):
 
         self.goals = 0
 
+        self.episode_logger = EpisodeLogger(
+            logger_episode_length=self.max_episode_length, ep_length_multiplier=1
+        )
+
         self.root_states = self.vec_root_tensor[:, 0, :]
         self.root_positions = self.root_states[..., 0:3]
         self.root_quats = self.root_states[..., 3:7]
         self.root_linvels = self.root_states[..., 7:10]
         self.root_angvels = self.root_states[..., 10:13]
 
-        self.prev_root_positions = torch.zeros_like(self.root_positions)
+        self.prev_root_positions = torch.zeros_like(
+            self.root_positions, dtype=torch.float32
+        )
 
         self.env_asset_root_states = self.vec_root_tensor[:, 1:, :]
 
@@ -220,10 +227,6 @@ class AerialRobotWithObstacles(BaseTask):
             requires_grad=False,
         )
 
-        self.num_rollouts = 0
-        self.traj = []
-        self.collided = False
-
         self.goal_spawning_offset = torch.tensor(
             self.cfg.goal_spawning_config.offset, device=self.device
         ).expand(self.num_envs, -1)
@@ -251,6 +254,9 @@ class AerialRobotWithObstacles(BaseTask):
         self.max_depth_value = 10
         self.min_depth_value = 0
 
+        self.num_unrolls = 0
+        self.num_logged_episodes = 0
+
         self.ones = torch.ones_like(self.reset_buf, device=self.reset_buf.device)
         self.zeros = torch.zeros_like(self.reset_buf, device=self.reset_buf.device)
 
@@ -275,6 +281,15 @@ class AerialRobotWithObstacles(BaseTask):
             cam_ref_env = self.cfg.viewer.ref_env
 
             self.gym.viewer_camera_look_at(self.viewer, None, cam_pos, cam_target)
+
+        self.successes = torch.zeros_like(self.ones)
+        self.crashes = torch.zeros_like(self.ones)
+        self.all_time_outs = torch.zeros_like(self.ones)
+        self.unsuccessful_timeouts = torch.zeros_like(self.ones)
+        self.close_to_goal = torch.zeros_like(self.ones)
+        self.distances_to_target = torch.zeros_like(self.ones, dtype=torch.float32)
+        self.prev_distances_to_target = torch.zeros_like(self.ones, dtype=torch.float32)
+        self.path_lengths = torch.zeros_like(self.ones, dtype=torch.float32)
 
     def create_sim(self):
         self.sim = self.gym.create_sim(
@@ -496,14 +511,17 @@ class AerialRobotWithObstacles(BaseTask):
             self.timeouts = torch.where(
                 self.progress_buf >= self.max_episode_length - 1, self.ones, self.zeros
             )
+        self.path_lengths += torch.norm(
+            self.root_positions - self.prev_root_positions, dim=1
+        )
+        self.prev_root_positions = self.root_positions
 
         self.compute_reward()
-        self.prev_distances_to_target[:] = self.distances_to_target
 
         self.reset_buf = torch.where(self.collisions > 0, self.ones, self.zeros)
         self.reset_buf = torch.where(self.timeouts > 0, self.ones, self.reset_buf)
         self.reset_buf = torch.where(
-            self.prev_distances_to_target < 0.2, self.ones, self.reset_buf
+            self.distances_to_target < 0.25, self.ones, self.reset_buf
         )
 
         if self.progress_buf[0] % 200 == 0:
@@ -516,36 +534,11 @@ class AerialRobotWithObstacles(BaseTask):
         self.render(sync_frame_time=False)
         self.render_cameras()
 
-        line = [
-            self.prev_root_positions[0][0].item(),
-            self.prev_root_positions[0][1].item(),
-            self.prev_root_positions[0][2].item(),
-            self.root_positions[0][0].item(),
-            self.root_positions[0][1].item(),
-            self.root_positions[0][2].item(),
-        ]
-        self.traj.append(line)
-        # self.gym.add_lines(self.viewer, self.envs[0], 1, line, [1, 0, 0])
-
-        if self.progress_buf[0] > 10:
-            if not self.progress_buf[0] % 20:
-                self.latent, self.hidden = self.S4WM.forward(
-                    self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
-                    self.action_input.view(self.num_envs, 1, 4),
-                    self.latent.view(self.num_envs, 1, self.latent_dim),
-                )
-            else:
-                self.latent, self.hidden, _ = self.S4WM.open_loop_predict(
-                    self.action_input.view(self.num_envs, 1, 4),
-                    self.latent.view(self.num_envs, 1, self.latent_dim),
-                )
-                # print(sigma_trace)
-        else:
-            self.latent, self.hidden = self.S4WM.forward(
-                self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
-                self.action_input.view(self.num_envs, 1, 4),
-                self.latent.view(self.num_envs, 1, self.latent_dim),
-            )
+        self.latent, self.hidden = self.S4WM.forward(
+            self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
+            self.action_input.view(self.num_envs, 1, 4),
+            self.latent.view(self.num_envs, 1, self.latent_dim),
+        )
 
         self.latent = self.latent.squeeze()
         self.hidden = self.hidden.squeeze()
@@ -567,11 +560,53 @@ class AerialRobotWithObstacles(BaseTask):
 
     def reset_idx(self, env_ids):
         num_resets = len(env_ids)
+        self.num_unrolls += num_resets
 
-        if self.num_rollouts == 0:
-            self.env_asset_manager.randomize_pose(reset_envs=env_ids)
+        if self.num_unrolls > 2 * self.num_envs:
+            self.num_logged_episodes += num_resets
+            print("Num logged episodes", self.num_logged_episodes)
 
-        self.num_rollouts += 1
+            self.update_episode_loggers(env_ids)
+
+            stats_dict = self.episode_logger.get_stats()
+
+            print("Counter: ", self.counter)
+            print("% Success: ", stats_dict["success_rate"])
+            print("% Crash: ", stats_dict["crash_rate"])
+            print("% Timeout: ", stats_dict["timeout_rate"])
+            print("Avg. Episode Length: ", stats_dict["episode_lengths_mean"])
+            print("Avg. Succesfull Traj Length: ", stats_dict["path_lengths_mean"])
+            print("Avg. Crash Traj Length: ", stats_dict["crash_episode_lengths_mean"])
+            print("Success Count: ", stats_dict["success_sum"])
+            print("Crash Count: ", stats_dict["crash_sum"])
+            print("Timeout Count: ", stats_dict["timeout_sum"])
+
+            if self.num_logged_episodes == 500:
+                print("----- EVAL DONE: -----")
+                print("% Success: ", stats_dict["success_rate"])
+                print("% Crash: ", stats_dict["crash_rate"])
+                print("% Timeout: ", stats_dict["timeout_rate"])
+                print(
+                    "Avg. Episode Length: ",
+                    stats_dict["episode_lengths_mean"],
+                    stats_dict["episode_lengths_std"],
+                )
+                print(
+                    "Avg. Succesfull Traj Length: ",
+                    stats_dict["path_lengths_mean"],
+                    stats_dict["path_lengths_std"],
+                )
+                print(
+                    "Avg. Crash Traj Length: ",
+                    stats_dict["crash_episode_lengths_mean"],
+                    stats_dict["crash_episode_lengths_mean"],
+                )
+                print("Success Count: ", stats_dict["success_sum"])
+                print("Crash Count: ", stats_dict["crash_sum"])
+                print("Timeout Count: ", stats_dict["timeout_sum"])
+                time.sleep(1000)
+
+        self.env_asset_manager.randomize_pose(reset_envs=env_ids)
 
         self.env_asset_root_states[env_ids, :, 0:3] = (
             self.env_asset_manager.asset_pose_tensor[env_ids, :, 0:3]
@@ -666,8 +701,9 @@ class AerialRobotWithObstacles(BaseTask):
         self.timeouts[env_ids] = 0
         self.hidden[env_ids] = 0
         self.reset_buf[env_ids] = 0
-        # self.gym.clear_lines(self.viewer)
-        self.prev_root_positions[:] = drone_positions
+
+        self.prev_root_positions[env_ids] = drone_positions
+        self.path_lengths[env_ids] = 0
 
         lines = generate_wireframe_sphere_lines(center, 0.13, 40)
 
@@ -682,26 +718,7 @@ class AerialRobotWithObstacles(BaseTask):
             ]
             self.gym.add_lines(self.viewer, self.envs[0], 1, spehere_line, [1, 0, 0])
 
-        for line in self.traj:
-            color = [0.9, 0.0, 0.0] if self.collisions[0] else [0.0, 0.9, 0.0]
-            self.gym.add_lines(self.viewer, self.envs[0], 1, line, color)
-
-        if self.collisions[0]:
-            self.crash += 1
-        else:
-            self.successful += 1
-
-        if self.num_rollouts == 102:
-            time.sleep(10000)
-
-        self.applied_control_actions = []
-
         self.collisions[env_ids] = 0
-
-        print(self.num_rollouts)
-        print(self.successful)
-        print(self.crash)
-        self.traj = []
 
     def pre_physics_step(self, _actions):
         # resets
@@ -856,6 +873,51 @@ class AerialRobotWithObstacles(BaseTask):
             self.collisions,
             self.timeouts,
             self.progress_buf,
+        )
+
+    def update_stats_at_reset(self, env_ids):
+        self.ones = torch.ones_like(self.ones)
+        self.zeros = torch.zeros_like(self.zeros)
+
+        self.successes = self.zeros.clone()
+        self.crashes = self.zeros.clone()
+        self.all_time_outs = self.zeros.clone()
+        self.unsuccessful_timeouts = self.zeros.clone()
+
+        # crashed robots are those that have collided with the environment
+        self.crashes[:] = torch.where(self.collisions > 0, self.ones, self.zeros)
+        self.crash_count = torch.sum(self.crashes > 0).item()
+
+        # successful robots are those that are close to the goal
+        self.successes[:] = torch.where(
+            self.distances_to_target < 0.25, self.ones, self.zeros
+        )
+        self.success_count = torch.sum(self.successes > 0).item()
+
+        # all timed out robots are those that have exceeded the max episode length
+        self.all_time_outs[:] = torch.where(
+            self.progress_buf >= self.max_episode_length - 1, self.ones, self.zeros
+        )
+
+        self.all_time_out_count = torch.sum(self.all_time_outs > 0).item()
+
+        # crashed episode lengths are the episode lengths of robots that have crashed
+        self.crash_episode_lengths = self.distances_to_target[self.crashes > 0]
+
+        self.successful_path_lengths = self.path_lengths[self.successes.nonzero()]
+        self.crash_path_lengths = self.path_lengths[self.crashes.nonzero()]
+        print(self.success_count)
+        print(self.crash_count)
+
+    def update_episode_loggers(self, env_ids):
+        self.update_stats_at_reset(env_ids)
+        self.episode_logger.update_lists(
+            success_count=self.success_count,
+            timeout_count=self.all_time_out_count,
+            crash_count=self.crash_count,
+            episode_lengths_list=self.progress_buf[env_ids].tolist(),
+            crash_episode_lengths=self.crash_path_lengths.tolist(),
+            path_lengths=self.successful_path_lengths.tolist(),
         )
 
 

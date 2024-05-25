@@ -6,7 +6,8 @@
 
 from .helpers import class_to_dict, get_args
 from .task_registry import task_registry
-from .logger import Logger
+from .logger import EpisodeLogger
 from .math import *
+from .episode_logger import EpisodeLogger
 
 from .asset_manager import AssetManager
