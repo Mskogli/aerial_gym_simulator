@@ -528,17 +528,24 @@ class AerialRobotWithObstacles(BaseTask):
         # self.gym.add_lines(self.viewer, self.envs[0], 1, line, [1, 0, 0])
 
         if self.progress_buf[0] > 10:
-            if self.progress_buf[0] % 2:
+            if not self.progress_buf[0] % 20:
                 self.latent, self.hidden = self.S4WM.forward(
                     self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
                     self.action_input.view(self.num_envs, 1, 4),
                     self.latent.view(self.num_envs, 1, self.latent_dim),
                 )
             else:
-                self.latent, self.hidden = self.S4WM.open_loop_predict(
+                self.latent, self.hidden, _ = self.S4WM.open_loop_predict(
                     self.action_input.view(self.num_envs, 1, 4),
                     self.latent.view(self.num_envs, 1, self.latent_dim),
                 )
+                # print(sigma_trace)
+        else:
+            self.latent, self.hidden = self.S4WM.forward(
+                self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
+                self.action_input.view(self.num_envs, 1, 4),
+                self.latent.view(self.num_envs, 1, self.latent_dim),
+            )
 
         self.latent = self.latent.squeeze()
         self.hidden = self.hidden.squeeze()
