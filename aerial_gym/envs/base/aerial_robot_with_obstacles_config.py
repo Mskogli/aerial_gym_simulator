@@ -23,14 +23,14 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         get_privileged_obs = True  # if True the states of all entitites in the environment will be returned as privileged observations, otherwise None will be returned
         num_actions = 4
         env_spacing = 16  # not used with heightfields/trimeshes
-        episode_length_s = 250  # episode length in seconds
+        episode_length_s = 60  # episode length in seconds
         num_control_steps_per_env_step = (
             10  # number of control & physics steps between camera renders
         )
         enable_onboard_cameras = True  # enable onboard cameras
         reset_on_collision = True  # reset environment when contact force on quadrotor is above a threshold
         create_ground_plane = True  # create a ground plane
-        dynamic_assets = False
+        dynamic_assets = True
 
         # RL stuff
         prediction_horizon = 1
@@ -198,8 +198,8 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [70, 200, 100]
 
     class object_asset_params(asset_state_params):
-        num_assets = 40
-        num_dynamic_assets = 0
+        num_assets = 81
+        num_dynamic_assets = 39
 
         max_position_ratio = [0.95, 0.85, 0.95]  # min position as a ratio of the bounds
         min_position_ratio = [0.05, 0.15, 0.05]  # max position as a ratio of the bounds
@@ -443,12 +443,12 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
     class goal_spawning_config:
         offset = [1.0, 1.0, 0.5]  # offset from each wall
         min_position_ratio = [
-            0.0,
+            0.5,
             1.0,
-            0.0,
+            0.5,
         ]  # min position as a ratio of the bounds after offset
         max_position_ratio = [
+            0.5,
             1.0,
-            1.0,
-            1.0,
+            0.5,
         ]  # max position as a ratio of the bounds after offset

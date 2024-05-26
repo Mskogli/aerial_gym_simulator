@@ -570,41 +570,54 @@ class AerialRobotWithObstacles(BaseTask):
 
             stats_dict = self.episode_logger.get_stats()
 
-            print("Counter: ", self.counter)
             print("% Success: ", stats_dict["success_rate"])
             print("% Crash: ", stats_dict["crash_rate"])
             print("% Timeout: ", stats_dict["timeout_rate"])
-            print("Avg. Episode Length: ", stats_dict["episode_lengths_mean"])
-            print("Avg. Succesfull Traj Length: ", stats_dict["path_lengths_mean"])
-            print("Avg. Crash Traj Length: ", stats_dict["crash_episode_lengths_mean"])
+            print(
+                "Avg. Succesfull Episode Lengths: ",
+                stats_dict["successful_episode_lengths_mean"],
+            )
+            print(
+                "Avg. Succesfull Traj Length: ",
+                stats_dict["successful_path_lengths_mean"],
+            )
+            print(
+                "Avg. Crash Episode Lengths: ", stats_dict["crash_episode_lengths_mean"]
+            )
+            print("Avg. Crash Traj Length: ", stats_dict["crash_path_lengths_mean"])
             print("Success Count: ", stats_dict["success_sum"])
             print("Crash Count: ", stats_dict["crash_sum"])
             print("Timeout Count: ", stats_dict["timeout_sum"])
 
             if self.num_logged_episodes == 500:
-                print("----- EVAL DONE: -----")
                 print("% Success: ", stats_dict["success_rate"])
                 print("% Crash: ", stats_dict["crash_rate"])
                 print("% Timeout: ", stats_dict["timeout_rate"])
                 print(
-                    "Avg. Episode Length: ",
-                    stats_dict["episode_lengths_mean"],
-                    stats_dict["episode_lengths_std"],
+                    "Avg. Succesfull Episode Lengths: ",
+                    stats_dict["successful_episode_lengths_mean"],
+                    stats_dict["successful_episode_lengths_std"],
                 )
                 print(
                     "Avg. Succesfull Traj Length: ",
-                    stats_dict["path_lengths_mean"],
-                    stats_dict["path_lengths_std"],
+                    stats_dict["successful_path_lengths_mean"],
+                    stats_dict["successful_path_lengths_std"],
+                )
+                print(
+                    "Avg. Crash Episode Lengths: ",
+                    stats_dict["crash_episode_lengths_mean"],
+                    stats_dict["crash_episode_lengths_std"],
                 )
                 print(
                     "Avg. Crash Traj Length: ",
-                    stats_dict["crash_episode_lengths_mean"],
-                    stats_dict["crash_episode_lengths_mean"],
+                    stats_dict["crash_path_lengths_mean"],
+                    stats_dict["crash_path_lengths_std"],
                 )
                 print("Success Count: ", stats_dict["success_sum"])
                 print("Crash Count: ", stats_dict["crash_sum"])
                 print("Timeout Count: ", stats_dict["timeout_sum"])
-                time.sleep(1000)
+
+                time.sleep(10000)
 
         self.env_asset_manager.randomize_pose(reset_envs=env_ids)
 
@@ -901,13 +914,13 @@ class AerialRobotWithObstacles(BaseTask):
 
         self.all_time_out_count = torch.sum(self.all_time_outs > 0).item()
 
-        # crashed episode lengths are the episode lengths of robots that have crashed
-        self.crash_episode_lengths = self.distances_to_target[self.crashes > 0]
+        self.successfull_episode_lengths = (
+            self.progress_buf[self.successes.nonzero()] / 10
+        )
+        self.crash_episode_lengths = self.progress_buf[self.crashes.nonzero()] / 10
 
         self.successful_path_lengths = self.path_lengths[self.successes.nonzero()]
         self.crash_path_lengths = self.path_lengths[self.crashes.nonzero()]
-        print(self.success_count)
-        print(self.crash_count)
 
     def update_episode_loggers(self, env_ids):
         self.update_stats_at_reset(env_ids)
@@ -915,9 +928,10 @@ class AerialRobotWithObstacles(BaseTask):
             success_count=self.success_count,
             timeout_count=self.all_time_out_count,
             crash_count=self.crash_count,
-            episode_lengths_list=self.progress_buf[env_ids].tolist(),
-            crash_episode_lengths=self.crash_path_lengths.tolist(),
-            path_lengths=self.successful_path_lengths.tolist(),
+            successfull_episode_length_list=self.successfull_episode_lengths.tolist(),
+            successful_path_lengths_list=self.successful_path_lengths.tolist(),
+            crash_episode_length_list=self.crash_episode_lengths.tolist(),
+            crash_path_lengths_list=self.crash_path_lengths.tolist(),
         )
 
 
