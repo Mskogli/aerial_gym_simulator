@@ -494,15 +494,15 @@ class AerialRobotWithObstacles(BaseTask):
         self.render(sync_frame_time=False)
         self.render_cameras()
 
-        self.latent, self.hidden = self.S4WM.forward(
+        self.latent, _ = self.S4WM.forward(
             self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
             self.action_input.view(self.num_envs, 1, 4),
             self.latent.view(self.num_envs, 1, self.latent_dim),
         )
         self.latent = self.latent.squeeze()
-        self.hidden = self.hidden.squeeze()
+        # self.hidden = self.hidden.squeeze()
         self.S4WM.reset_cache(reset_env_ids)
-        self.hidden[reset_env_ids] = 0
+        # self.hidden[reset_env_ids] = 0
 
         self.compute_observations()
 
@@ -605,7 +605,7 @@ class AerialRobotWithObstacles(BaseTask):
         # Zero progress and reset buffers
         self.progress_buf[env_ids] = 0
         self.timeouts[env_ids] = 0
-        self.hidden[env_ids] = 0
+        # self.hidden[env_ids] = 0
 
     def pre_physics_step(self, _actions):
         # resets
@@ -746,9 +746,6 @@ class AerialRobotWithObstacles(BaseTask):
         self.obs_buf[..., 6:9] = self.linvels_body_frame
         self.obs_buf[..., 10:13] = self.angvels_body_frame
         self.obs_buf[..., 13 : 13 + self.latent_dim] = self.latent
-        self.obs_buf[
-            ..., 13 + self.latent_dim : 13 + self.latent_dim + self.hidden_dim
-        ] = self.hidden
 
         return self.obs_buf
 
