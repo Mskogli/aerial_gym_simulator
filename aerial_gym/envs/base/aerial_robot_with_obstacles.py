@@ -514,7 +514,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.path_lengths += torch.norm(
             self.root_positions - self.prev_root_positions, dim=1
         )
-        self.prev_root_positions = self.root_positions
+        # self.prev_root_positions = self.root_positions
 
         self.compute_reward()
 
@@ -531,6 +531,15 @@ class AerialRobotWithObstacles(BaseTask):
         if len(reset_env_ids) > 0:
             self.reset_idx(reset_env_ids)
 
+        line = [
+            self.prev_root_positions[0][0].item(),
+            self.prev_root_positions[0][1].item(),
+            self.prev_root_positions[0][2].item(),
+            self.root_positions[0][0].item(),
+            self.root_positions[0][1].item(),
+            self.root_positions[0][2].item(),
+        ]
+        self.gym.add_lines(self.viewer, self.envs[0], 1, line, [1, 0, 0])
         self.render(sync_frame_time=False)
         self.render_cameras()
 

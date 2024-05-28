@@ -30,7 +30,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         enable_onboard_cameras = True  # enable onboard cameras
         reset_on_collision = True  # reset environment when contact force on quadrotor is above a threshold
         create_ground_plane = True  # create a ground plane
-        dynamic_assets = True
+        dynamic_assets = False
 
         # RL stuff
         prediction_horizon = 1
@@ -198,8 +198,8 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [70, 200, 100]
 
     class object_asset_params(asset_state_params):
-        num_assets = 81
-        num_dynamic_assets = 39
+        num_assets = 160
+        num_dynamic_assets = 0
 
         max_position_ratio = [0.95, 0.85, 0.95]  # min position as a ratio of the bounds
         min_position_ratio = [0.05, 0.15, 0.05]  # max position as a ratio of the bounds
