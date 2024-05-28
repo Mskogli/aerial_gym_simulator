@@ -26,7 +26,7 @@ from aerial_gym.utils.asset_manager import AssetManager
 from aerial_gym.utils.helpers import asset_class_to_AssetOptions
 
 import time
-from s4wm.nn.s4_wm import S4WMTorchWrapper
+from sevae.inference.scripts.VAENetworkInterface import VAENetworkInterface
 
 
 class AerialRobotWithObstacles(BaseTask):
@@ -55,7 +55,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.enable_onboard_cameras = self.cfg.env.enable_onboard_cameras
 
         self.env_asset_manager = AssetManager(self.cfg, sim_device)
-        self.cam_resolution = (240, 135)
+        self.cam_resolution = (480, 270)
 
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless)
         self.root_tensor = self.gym.acquire_actor_root_state_tensor(self.sim)
@@ -143,15 +143,7 @@ class AerialRobotWithObstacles(BaseTask):
 
         os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
-        self.S4WM = S4WMTorchWrapper(
-            self.num_envs,
-            "/home/mathias/dev/rl_checkpoints/gaussian_128",
-            d_latent=self.latent_dim * 2,
-            d_pssm_blocks=self.hidden_dim,
-            num_pssm_blocks=3,
-            d_ssm=128,
-            sample_mean=True,
-        )
+        self.seVAE = VAENetworkInterface(device=self.device, latent_space_dims=128)
 
         self.latent = torch.zeros(
             (self.num_envs, self.latent_dim),
@@ -241,7 +233,7 @@ class AerialRobotWithObstacles(BaseTask):
 
         if self.cfg.env.enable_onboard_cameras:
             self.full_camera_array = torch.zeros(
-                (self.num_envs, 135, 240), device=self.device
+                (self.num_envs, 270, 480), device=self.device
             )
 
         if self.viewer:
@@ -494,14 +486,9 @@ class AerialRobotWithObstacles(BaseTask):
         self.render(sync_frame_time=False)
         self.render_cameras()
 
-        self.latent, _ = self.S4WM.forward(
-            self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
-            self.action_input.view(self.num_envs, 1, 4),
-            self.latent.view(self.num_envs, 1, self.latent_dim),
-        )
+        self.latent = self.seVAE.forward_torch(self.full_camera_array)
         self.latent = self.latent.squeeze()
         # self.hidden = self.hidden.squeeze()
-        self.S4WM.reset_cache(reset_env_ids)
         # self.hidden[reset_env_ids] = 0
 
         self.compute_observations()
@@ -679,6 +666,9 @@ class AerialRobotWithObstacles(BaseTask):
         self.full_camera_array = (self.full_camera_array - self.min_depth_value) / (
             self.max_depth_value - self.min_depth_value
         )
+        self.full_camera_array[
+            self.full_camera_array < 0.2 * (self.max_depth_value)
+        ] = -1.0
 
     def post_physics_step(self):
         self.gym.refresh_actor_root_state_tensor(self.sim)
