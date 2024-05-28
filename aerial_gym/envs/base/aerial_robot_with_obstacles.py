@@ -650,7 +650,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.gym.start_access_image_tensors(self.sim)
         self.dump_images()
         self.gym.end_access_image_tensors(self.sim)
-        self._process_depth_images()
+        # self._process_depth_images()
         return
 
     def _process_depth_images(self):
