@@ -501,7 +501,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.reset_buf = torch.where(
             self.prev_distances_to_target < 0.5, self.ones, self.reset_buf
         )
-        
+
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
             self.reset_idx(reset_env_ids)
