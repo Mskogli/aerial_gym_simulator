@@ -198,7 +198,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [70, 200, 100]
 
     class object_asset_params(asset_state_params):
-        num_assets = 30
+        num_assets = 100
         num_dynamic_assets = 0
 
         max_position_ratio = [0.95, 0.85, 0.95]  # min position as a ratio of the bounds
@@ -424,8 +424,8 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
             -15.0,
             0.0,
         ]  # lower bound for the environment space
-        env_upper_bound_min = [5.0, 15.0, 5.0]  # upper bound for the environment space
-        env_upper_bound_max = [5.0, 15.0, 5.0]  # upper bound for the environment space
+        env_upper_bound_min = [5.0, 15.0, 10.0]  # upper bound for the environment space
+        env_upper_bound_max = [5.0, 15.0, 10.0]  # upper bound for the environment space
 
     class robot_spawning_config:
         offset = [1.0, 1.0, 0.5]  # offset from each wall
@@ -437,7 +437,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         max_position_ratio = [
             1.0,
             0.0,
-            1.0,
+            0.75,
         ]  # max position as a ratio of the bounds after offset
 
     class goal_spawning_config:
