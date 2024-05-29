@@ -499,9 +499,9 @@ class AerialRobotWithObstacles(BaseTask):
         self.reset_buf = torch.where(self.collisions > 0, self.ones, self.zeros)
         self.reset_buf = torch.where(self.timeouts > 0, self.ones, self.reset_buf)
         self.reset_buf = torch.where(
-            self.prev_distances_to_target < 0.2, self.ones, self.reset_buf
+            self.prev_distances_to_target < 0.5, self.ones, self.reset_buf
         )
-
+        
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
             self.reset_idx(reset_env_ids)
@@ -641,7 +641,6 @@ class AerialRobotWithObstacles(BaseTask):
 
         # Zero progress and reset buffers
         self.progress_buf[env_ids] = 0
-        self.timeouts[env_ids] = 0
         self.hidden[env_ids] = 0
         self.reset_buf[env_ids] = 0
         # self.gym.clear_lines(self.viewer)
@@ -661,7 +660,13 @@ class AerialRobotWithObstacles(BaseTask):
             self.gym.add_lines(self.viewer, self.envs[0], 1, spehere_line, [1, 0, 0])
 
         for line in self.traj:
-            color = [0.9, 0.0, 0.0] if self.collisions[0] else [0.0, 0.9, 0.0]
+            if self.collisions[0]:
+                color = [0.9, 0.0, 0.0]
+            elif self.timeouts[0]:
+                color = [0.0, 0.0, 0.9]
+            else:
+                color = [0.0, 0.9, 0.0]
+            # color = [0.9, 0.0, 0.0] if self.collisions[0] else [0.0, 0.9, 0.0]
             self.gym.add_lines(self.viewer, self.envs[0], 1, line, color)
 
         if self.collisions[0]:
@@ -675,6 +680,7 @@ class AerialRobotWithObstacles(BaseTask):
             time.sleep(10000)
 
         self.collisions[env_ids] = 0
+        self.timeouts[env_ids] = 0
         print(self.successful)
         print(self.crash)
         self.traj = []

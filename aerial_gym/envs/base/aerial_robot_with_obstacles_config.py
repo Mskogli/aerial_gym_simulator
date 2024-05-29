@@ -16,14 +16,14 @@ WALL_SEMANTIC_ID = 8
 
 
 class AerialRobotWithObstaclesCfg(BaseConfig):
-    seed = 6
+    seed = 42  # 44 timeout
 
     class env:
         num_envs = 64
         get_privileged_obs = True  # if True the states of all entitites in the environment will be returned as privileged observations, otherwise None will be returned
         num_actions = 4
-        env_spacing = 5.0  # not used with heightfields/trimeshes
-        episode_length_s = 40  # episode length in seconds
+        env_spacing = 16  # not used with heightfields/trimeshes
+        episode_length_s = 60  # episode length in seconds
         num_control_steps_per_env_step = (
             10  # number of control & physics steps between camera renders
         )
@@ -40,7 +40,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
 
     class viewer:
         ref_env = 0
-        pos = [-0.00000001, 0, 20]  # [m]
+        pos = [-0.00000001, 0, 25.5]  # [m]
         lookat = [0, 0, 0]  # [m]
 
     class sim:
@@ -198,7 +198,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [70, 200, 100]
 
     class object_asset_params(asset_state_params):
-        num_assets = 100
+        num_assets = 160
         num_dynamic_assets = 0
 
         max_position_ratio = [0.95, 0.85, 0.95]  # min position as a ratio of the bounds
@@ -424,8 +424,8 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
             -15.0,
             0.0,
         ]  # lower bound for the environment space
-        env_upper_bound_min = [5.0, 15.0, 10.0]  # upper bound for the environment space
-        env_upper_bound_max = [5.0, 15.0, 10.0]  # upper bound for the environment space
+        env_upper_bound_min = [5.0, 15.0, 10]  # upper bound for the environment space
+        env_upper_bound_max = [5.0, 15.0, 10]  # upper bound for the environment space
 
     class robot_spawning_config:
         offset = [1.0, 1.0, 0.5]  # offset from each wall
