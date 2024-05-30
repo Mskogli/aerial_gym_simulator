@@ -16,7 +16,7 @@ WALL_SEMANTIC_ID = 8
 
 
 class AerialRobotWithObstaclesCfg(BaseConfig):
-    seed = 102211  # 44 timeout
+    seed = 1223  # 44 timeout
 
     class env:
         num_envs = 64
@@ -198,11 +198,11 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [70, 200, 100]
 
     class object_asset_params(asset_state_params):
-        num_assets = 35
+        num_assets = 22
         num_dynamic_assets = 0
 
-        max_position_ratio = [0.95, 0.85, 0.0]  # min position as a ratio of the bounds
-        min_position_ratio = [0.05, 0.15, 0.0]  # max position as a ratio of the bounds
+        max_position_ratio = [0.1, 0.85, 0.0]  # min position as a ratio of the bounds
+        min_position_ratio = [0.9, 0.15, 0.0]  # max position as a ratio of the bounds
 
         specified_position = [
             -1000.0,
