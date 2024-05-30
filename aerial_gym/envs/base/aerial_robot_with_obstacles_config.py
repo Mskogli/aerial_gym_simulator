@@ -16,7 +16,7 @@ WALL_SEMANTIC_ID = 8
 
 
 class AerialRobotWithObstaclesCfg(BaseConfig):
-    seed = 42  # 44 timeout
+    seed = 102211  # 44 timeout
 
     class env:
         num_envs = 64
@@ -134,7 +134,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = None
 
     class thin_asset_params(asset_state_params):
-        num_assets = 10
+        num_assets = 15
         num_dynamic_assets = 0
 
         collision_mask = 1  # objects with the same collision mask will not collide
@@ -152,9 +152,9 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         max_euler_angles = [np.pi, np.pi, np.pi]  # max euler angles
 
         specified_euler_angle = [
-            -1000.0,
-            -1000.0,
-            -1000.0,
+            -0,
+            -0,
+            -0,
         ]  # if > -900, use this value instead of randomizing
 
         collapse_fixed_joints = True
@@ -198,11 +198,11 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [70, 200, 100]
 
     class object_asset_params(asset_state_params):
-        num_assets = 160
+        num_assets = 35
         num_dynamic_assets = 0
 
-        max_position_ratio = [0.95, 0.85, 0.95]  # min position as a ratio of the bounds
-        min_position_ratio = [0.05, 0.15, 0.05]  # max position as a ratio of the bounds
+        max_position_ratio = [0.95, 0.85, 0.0]  # min position as a ratio of the bounds
+        min_position_ratio = [0.05, 0.15, 0.0]  # max position as a ratio of the bounds
 
         specified_position = [
             -1000.0,
@@ -214,9 +214,9 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         max_euler_angles = [0, np.pi / 6, np.pi]  # max euler angles
 
         specified_euler_angle = [
-            -1000.0,
-            -1000.0,
-            -1000.0,
+            0,
+            0,
+            0,
         ]  # if > -900, use this value instead of randomizing
 
         links_per_asset = 1

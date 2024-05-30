@@ -499,8 +499,13 @@ class AerialRobotWithObstacles(BaseTask):
         self.reset_buf = torch.where(self.collisions > 0, self.ones, self.zeros)
         self.reset_buf = torch.where(self.timeouts > 0, self.ones, self.reset_buf)
         self.reset_buf = torch.where(
-            self.prev_distances_to_target < 0.5, self.ones, self.reset_buf
+            self.prev_distances_to_target < 0.2, self.ones, self.reset_buf
         )
+
+        if (
+            self.progress_buf[0] % 200 == 0
+        ):  # This should be done for every env in the eval
+            self.S4WM.reset_cache(torch.tensor([0], device=self.device))
 
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
@@ -662,12 +667,13 @@ class AerialRobotWithObstacles(BaseTask):
         for line in self.traj:
             if self.collisions[0]:
                 color = [0.9, 0.0, 0.0]
-            elif self.timeouts[0]:
-                color = [0.0, 0.0, 0.9]
+            # elif self.timeouts[0]:
+            # color = [0.0, 0.0, 0.9]
             else:
                 color = [0.0, 0.9, 0.0]
             # color = [0.9, 0.0, 0.0] if self.collisions[0] else [0.0, 0.9, 0.0]
-            self.gym.add_lines(self.viewer, self.envs[0], 1, line, color)
+            if not self.timeouts[0]:
+                self.gym.add_lines(self.viewer, self.envs[0], 1, line, color)
 
         if self.collisions[0]:
             self.crash += 1
