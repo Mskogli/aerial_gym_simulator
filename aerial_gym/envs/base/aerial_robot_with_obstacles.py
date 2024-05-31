@@ -513,7 +513,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.reset_buf = torch.where(self.collisions > 0, self.ones, self.zeros)
         self.reset_buf = torch.where(self.timeouts > 0, self.ones, self.reset_buf)
         self.reset_buf = torch.where(
-            self.distances_to_target < 0.25, self.ones, self.reset_buf
+            self.distances_to_target < 1.0, self.ones, self.reset_buf
         )
 
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
@@ -532,9 +532,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.render(sync_frame_time=False)
         self.render_cameras()
 
-        self.latent = self.seVAE.forward_torch(
-            self.full_camera_array
-        )
+        self.latent = self.seVAE.forward_torch(self.full_camera_array)
 
         self.latent = self.latent.squeeze()
 
@@ -892,7 +890,7 @@ class AerialRobotWithObstacles(BaseTask):
 
         # successful robots are those that are close to the goal
         self.successes[:] = torch.where(
-            self.distances_to_target < 0.25, self.ones, self.zeros
+            self.distances_to_target < 1.0, self.ones, self.zeros
         )
         self.success_count = torch.sum(self.successes > 0).item()
 
