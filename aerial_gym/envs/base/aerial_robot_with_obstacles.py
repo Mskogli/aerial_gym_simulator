@@ -525,7 +525,7 @@ class AerialRobotWithObstacles(BaseTask):
         )
 
         cache_resets = torch.where(
-            (self.progress_buf % 200 == 0), self.ones, self.zeros
+            (self.progress_buf % 260 == 0), self.ones, self.zeros
         )
         cache_resets = torch.nonzero(cache_resets)
 
