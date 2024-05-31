@@ -27,7 +27,7 @@ from aerial_gym.utils.episode_logger import EpisodeLogger
 from aerial_gym.utils.helpers import asset_class_to_AssetOptions
 
 import time
-from s4wm.nn.s4_wm import S4WMTorchWrapper
+from sevae.inference.scripts.VAENetworkInterface import VAENetworkInterface
 
 
 class AerialRobotWithObstacles(BaseTask):
@@ -56,7 +56,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.enable_onboard_cameras = self.cfg.env.enable_onboard_cameras
 
         self.env_asset_manager = AssetManager(self.cfg, sim_device)
-        self.cam_resolution = (240, 135)
+        self.cam_resolution = (480, 270)
 
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless)
         self.root_tensor = self.gym.acquire_actor_root_state_tensor(self.sim)
@@ -156,16 +156,8 @@ class AerialRobotWithObstacles(BaseTask):
         self.hidden_dim = cfg.env.hidden_dim
         self.prediction_horizon = cfg.env.prediction_horizon
 
-        os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-
-        self.S4WM = S4WMTorchWrapper(
-            self.num_envs,
-            "/home/mathias/dev/rl_checkpoints/gaussian_128",
-            d_latent=self.latent_dim * 2,
-            d_pssm_blocks=self.hidden_dim,
-            num_pssm_blocks=3,
-            d_ssm=128,
-            sample_mean=True,
+        self.seVAE = VAENetworkInterface(
+            latent_space_dims=self.latent_dim, device=self.device
         )
 
         self.left_env_bounds = False
@@ -262,7 +254,7 @@ class AerialRobotWithObstacles(BaseTask):
 
         if self.cfg.env.enable_onboard_cameras:
             self.full_camera_array = torch.zeros(
-                (self.num_envs, 135, 240), device=self.device
+                (self.num_envs, 270, 480), device=self.device
             )
 
         if self.viewer:
@@ -524,16 +516,6 @@ class AerialRobotWithObstacles(BaseTask):
             self.distances_to_target < 0.25, self.ones, self.reset_buf
         )
 
-        cache_resets = torch.where(
-            (self.progress_buf % 200 == 0), self.ones, self.zeros
-        )
-        cache_resets = torch.nonzero(cache_resets)
-
-        if (
-            cache_resets.numel()
-        ):  # This should be done for every env in the eval
-            self.S4WM.reset_cache(cache_resets)
-
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
             self.reset_idx(reset_env_ids)
@@ -550,16 +532,11 @@ class AerialRobotWithObstacles(BaseTask):
         self.render(sync_frame_time=False)
         self.render_cameras()
 
-        self.latent, self.hidden = self.S4WM.forward(
-            self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
-            self.action_input.view(self.num_envs, 1, 4),
-            self.latent.view(self.num_envs, 1, self.latent_dim),
+        self.latent = self.seVAE.forward_torch(
+            self.full_camera_array.view(self.num_envs, 270, 480)
         )
 
         self.latent = self.latent.squeeze()
-        self.hidden = self.hidden.squeeze()
-        self.S4WM.reset_cache(reset_env_ids)
-        self.hidden[reset_env_ids] = 0
 
         self.compute_observations()
 
@@ -728,7 +705,6 @@ class AerialRobotWithObstacles(BaseTask):
         # Zero progress and reset buffers
         self.progress_buf[env_ids] = 0
         self.timeouts[env_ids] = 0
-        self.hidden[env_ids] = 0
         self.reset_buf[env_ids] = 0
 
         self.prev_root_positions[env_ids] = drone_positions
@@ -805,7 +781,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.gym.start_access_image_tensors(self.sim)
         self.dump_images()
         self.gym.end_access_image_tensors(self.sim)
-        self._process_depth_images()
+        # self._process_depth_images()
         return
 
     def _process_depth_images(self):
@@ -888,9 +864,6 @@ class AerialRobotWithObstacles(BaseTask):
         self.obs_buf[..., 6:9] = self.linvels_body_frame
         self.obs_buf[..., 10:13] = self.angvels_body_frame
         self.obs_buf[..., 13 : 13 + self.latent_dim] = self.latent
-        self.obs_buf[
-            ..., 13 + self.latent_dim : 13 + self.latent_dim + self.hidden_dim
-        ] = self.hidden
 
         return self.obs_buf
 
