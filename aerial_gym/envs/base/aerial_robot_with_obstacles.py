@@ -525,9 +525,14 @@ class AerialRobotWithObstacles(BaseTask):
         )
 
         cache_resets = torch.where(
-            (self.progress_buf % 250 == 0), self.ones, self.zeros
+            (self.progress_buf % 200 == 0), self.ones, self.zeros
         )
-        self.S4WM.reset_cache(cache_resets)
+        cache_resets = torch.nonzero(cache_resets)
+
+        if (
+            cache_resets.numel()
+        ):  # This should be done for every env in the eval
+            self.S4WM.reset_cache(cache_resets)
 
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
