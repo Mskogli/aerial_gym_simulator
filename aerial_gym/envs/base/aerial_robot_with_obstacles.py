@@ -533,7 +533,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.render_cameras()
 
         self.latent = self.seVAE.forward_torch(
-            self.full_camera_array.view(self.num_envs, 270, 480)
+            self.full_camera_array
         )
 
         self.latent = self.latent.squeeze()
