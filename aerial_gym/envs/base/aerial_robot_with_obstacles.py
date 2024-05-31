@@ -524,10 +524,10 @@ class AerialRobotWithObstacles(BaseTask):
             self.distances_to_target < 0.25, self.ones, self.reset_buf
         )
 
-        if (
-            self.progress_buf[0] % 200 == 0
-        ):  # This should be done for every env in the eval
-            self.S4WM.reset_cache(torch.tensor([0], device=self.device))
+        cache_resets = torch.where(
+            (self.progress_buf % 250 == 0), self.ones, self.zeros
+        )
+        self.S4WM.reset_cache(cache_resets)
 
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
