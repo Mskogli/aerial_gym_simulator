@@ -36,7 +36,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         prediction_horizon = 1
         latent_dim = 128
         hidden_dim = 512
-        num_observations = 13 + latent_dim + hidden_dim
+        num_observations = 13 + latent_dim
 
     class viewer:
         ref_env = 0
