@@ -25,6 +25,8 @@ from aerial_gym.utils.asset_manager import AssetManager
 from aerial_gym.utils.episode_logger import EpisodeLogger
 
 from aerial_gym.utils.helpers import asset_class_to_AssetOptions
+from aerial_gym.utils.sampler import Sampler
+import matplotlib.pyplot as plt
 
 import time
 from s4wm.nn.s4_wm import S4WMTorchWrapper
@@ -135,6 +137,24 @@ class AerialRobotWithObstacles(BaseTask):
             dtype=torch.float32,
             device=self.device,
             requires_grad=False,
+        )
+
+        # Noise stuff
+        self.perturb_observations = True
+
+        class camera_depth_noise:
+            enable = True
+            distribution = "normal"
+            dist_params = {"loc": 0.0, "scale": 1.0}
+            transform_after_sampling = True  # to make sure the depth measurements have high noise for large distances
+
+        self.camera_depth_noise_sampler = Sampler(
+            camera_depth_noise.enable,
+            camera_depth_noise.distribution,
+            camera_depth_noise.dist_params,
+            transform_after_sampling=camera_depth_noise.transform_after_sampling,
+            size=torch.Size([self.num_envs, 135, 240]),
+            device=self.device,
         )
 
         self.controller = Controller(self.cfg.control, self.device)
@@ -343,6 +363,8 @@ class AerialRobotWithObstacles(BaseTask):
         # Set Camera Properties
         camera_props = gymapi.CameraProperties()
         camera_props.enable_tensors = True
+        camera_props.use_collision_geometry = True
+
         camera_props.width = self.cam_resolution[0]
         camera_props.height = self.cam_resolution[1]
         camera_props.far_plane = 15.0
@@ -521,7 +543,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.reset_buf = torch.where(self.collisions > 0, self.ones, self.zeros)
         self.reset_buf = torch.where(self.timeouts > 0, self.ones, self.reset_buf)
         self.reset_buf = torch.where(
-            self.distances_to_target < 1.0, self.ones, self.reset_buf
+            self.distances_to_target < 0.25, self.ones, self.reset_buf
         )
 
         cache_resets = torch.where(
@@ -540,17 +562,38 @@ class AerialRobotWithObstacles(BaseTask):
         if len(reset_env_ids) > 0:
             self.reset_idx(reset_env_ids)
 
-        line = [
-            self.prev_root_positions[0][0].item(),
-            self.prev_root_positions[0][1].item(),
-            self.prev_root_positions[0][2].item(),
-            self.root_positions[0][0].item(),
-            self.root_positions[0][1].item(),
-            self.root_positions[0][2].item(),
-        ]
-        self.gym.add_lines(self.viewer, self.envs[0], 1, line, [1, 0, 0])
+        # line = [
+        #     self.prev_root_positions[0][0].item(),
+        #     self.prev_root_positions[0][1].item(),
+        #     self.prev_root_positions[0][2].item(),
+        #     self.root_positions[0][0].item(),
+        #     self.root_positions[0][1].item(),
+        #     self.root_positions[0][2].item(),
+        # ]
+        # self.gym.add_lines(self.viewer, self.envs[0], 1, line, [1, 0, 0])
         self.render(sync_frame_time=False)
         self.render_cameras()
+
+        if self.progress_buf[0] == 10:
+            plt.imsave(
+                "withoutnoise.png",
+                self.full_camera_array.view(135, 240).cpu().numpy(),
+                cmap="magma",
+                vmin=0,
+                vmax=1,
+            )
+
+        self.apply_white_noise_to_cameras()
+
+        if self.progress_buf[0] == 10:
+            plt.imsave(
+                "withnoise.png",
+                self.full_camera_array.view(135, 240).cpu().numpy(),
+                cmap="magma",
+                vmin=0,
+                vmax=1,
+            )
+            plt.show()
 
         self.latent, self.hidden = self.S4WM.forward(
             self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
@@ -736,18 +779,18 @@ class AerialRobotWithObstacles(BaseTask):
         self.prev_root_positions[env_ids] = drone_positions
         self.path_lengths[env_ids] = 0
 
-        lines = generate_wireframe_sphere_lines(center, 0.13, 40)
+        # lines = generate_wireframe_sphere_lines(center, 0.13, 40)
 
-        for line in lines:
-            spehere_line = [
-                line[0][0],
-                line[0][1],
-                line[0][2],
-                line[1][0],
-                line[1][1],
-                line[1][2],
-            ]
-            self.gym.add_lines(self.viewer, self.envs[0], 1, spehere_line, [1, 0, 0])
+        # for line in lines:
+        #     spehere_line = [
+        #         line[0][0],
+        #         line[0][1],
+        #         line[0][2],
+        #         line[1][0],
+        #         line[1][1],
+        #         line[1][2],
+        #     ]
+        #     self.gym.add_lines(self.viewer, self.envs[0], 1, spehere_line, [1, 0, 0])
 
         self.collisions[env_ids] = 0
 
@@ -884,11 +927,47 @@ class AerialRobotWithObstacles(BaseTask):
         )
         self.compute_vehicle_frame_states()
 
-        self.obs_buf[..., :3] = self.unit_goal_dir_vehicle_frame
-        self.obs_buf[..., 3] = self.distances_to_target
-        self.obs_buf[..., 4:6] = self.root_euler_angles[:, 0:2]
-        self.obs_buf[..., 6:9] = self.linvels_body_frame
-        self.obs_buf[..., 10:13] = self.angvels_body_frame
+        perturbed_dist_to_target = (
+            self.distances_to_target
+            + self.perturb_observations
+            * torch.rand_like(self.distances_to_target)
+            * 0.1
+        )
+        perturbed_body_linvels = (
+            self.linvels_body_frame
+            + self.perturb_observations
+            * torch.rand_like(self.linvels_body_frame)
+            * 0.03
+        )
+        perturbed_body_angvels = (
+            self.angvels_body_frame
+            + self.perturb_observations
+            * torch.rand_like(self.angvels_body_frame)
+            * 0.08
+        )
+        perturbed_euler_angles = (
+            self.root_euler_angles
+            + self.perturb_observations * torch.rand_like(self.root_euler_angles) * 0.08
+        )
+
+        random_unit_vector = torch.rand_like(self.unit_goal_dir_vehicle_frame)
+        random_unit_vector = random_unit_vector / torch.norm(
+            random_unit_vector, dim=1
+        ).unsqueeze(-1)
+        perturbed_unit_goal_dir_vehicle_frame = (
+            self.unit_goal_dir_vehicle_frame
+            + self.perturb_observations * random_unit_vector * 0.05
+        )
+        perturbed_unit_goal_dir_vehicle_frame = (
+            perturbed_unit_goal_dir_vehicle_frame
+            / torch.norm(perturbed_unit_goal_dir_vehicle_frame, dim=1).unsqueeze(-1)
+        )
+
+        self.obs_buf[..., :3] = perturbed_unit_goal_dir_vehicle_frame
+        self.obs_buf[..., 3] = perturbed_dist_to_target
+        self.obs_buf[..., 4:6] = perturbed_euler_angles[:, 0:2]
+        self.obs_buf[..., 6:9] = perturbed_body_linvels
+        self.obs_buf[..., 10:13] = perturbed_body_angvels
         self.obs_buf[..., 13 : 13 + self.latent_dim] = self.latent
         self.obs_buf[
             ..., 13 + self.latent_dim : 13 + self.latent_dim + self.hidden_dim
@@ -921,7 +1000,7 @@ class AerialRobotWithObstacles(BaseTask):
 
         # successful robots are those that are close to the goal
         self.successes[:] = torch.where(
-            self.distances_to_target < 1.0, self.ones, self.zeros
+            self.distances_to_target < 0.25, self.ones, self.zeros
         )
         self.success_count = torch.sum(self.successes > 0).item()
 
@@ -951,6 +1030,20 @@ class AerialRobotWithObstacles(BaseTask):
             crash_episode_length_list=self.crash_episode_lengths.tolist(),
             crash_path_lengths_list=self.crash_path_lengths.tolist(),
         )
+
+    def apply_white_noise_to_cameras(self):
+        self.full_camera_array[:] = (
+            self.full_camera_array
+            + self.camera_depth_noise_sampler.sample(
+                torch.zeros_like(self.full_camera_array),
+                0.08 * self.full_camera_array,
+            )
+        )
+        self.random_invalid_pixels = torch.bernoulli(
+            torch.ones_like(self.full_camera_array) * 0.03
+        )
+        self.full_camera_array[:] = torch.clamp(self.full_camera_array, 0.0, 1.0)
+        self.full_camera_array[self.random_invalid_pixels > 0] = -1.0
 
 
 def generate_wireframe_sphere_lines(center, radius, num_segments):

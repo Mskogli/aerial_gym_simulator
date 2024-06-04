@@ -249,7 +249,10 @@ def update_config(config, args):
     return config
 
 
+import torch
+
 if __name__ == "__main__":
+    torch.manual_seed(101)
     os.makedirs("nn", exist_ok=True)
     os.makedirs("runs", exist_ok=True)
 

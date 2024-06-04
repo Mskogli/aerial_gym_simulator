@@ -9,5 +9,5 @@ from .task_registry import task_registry
 from .logger import EpisodeLogger
 from .math import *
 from .episode_logger import EpisodeLogger
-
+from .sampler import Sampler
 from .asset_manager import AssetManager
