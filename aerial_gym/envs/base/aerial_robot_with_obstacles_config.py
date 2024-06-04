@@ -16,14 +16,14 @@ WALL_SEMANTIC_ID = 8
 
 
 class AerialRobotWithObstaclesCfg(BaseConfig):
-    seed = 1223  # 44 timeout
+    seed = 110  # 44 timeout
 
     class env:
         num_envs = 64
         get_privileged_obs = True  # if True the states of all entitites in the environment will be returned as privileged observations, otherwise None will be returned
         num_actions = 4
         env_spacing = 16  # not used with heightfields/trimeshes
-        episode_length_s = 60  # episode length in seconds
+        episode_length_s = 45  # episode length in seconds
         num_control_steps_per_env_step = (
             10  # number of control & physics steps between camera renders
         )

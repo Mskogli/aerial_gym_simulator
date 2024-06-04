@@ -246,6 +246,8 @@ class AerialRobotWithObstacles(BaseTask):
         self.max_depth_value = 10
         self.min_depth_value = 0
 
+        self.trajs = []
+
         self.ones = torch.ones_like(self.reset_buf, device=self.reset_buf.device)
         self.zeros = torch.zeros_like(self.reset_buf, device=self.reset_buf.device)
 
@@ -503,7 +505,7 @@ class AerialRobotWithObstacles(BaseTask):
         )
 
         if (
-            self.progress_buf[0] % 200 == 0
+            self.progress_buf[0] % 260 == 0
         ):  # This should be done for every env in the eval
             self.S4WM.reset_cache(torch.tensor([0], device=self.device))
 
@@ -525,11 +527,18 @@ class AerialRobotWithObstacles(BaseTask):
         self.traj.append(line)
         # self.gym.add_lines(self.viewer, self.envs[0], 1, line, [1, 0, 0])
 
-        self.latent, self.hidden = self.S4WM.forward(
-            self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
-            self.action_input.view(self.num_envs, 1, 4),
-            self.latent.view(self.num_envs, 1, self.latent_dim),
-        )
+        if not self.progress_buf[0] % 1:
+            self.latent, self.hidden = self.S4WM.forward(
+                self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
+                self.action_input.view(self.num_envs, 1, 4),
+                self.latent.view(self.num_envs, 1, self.latent_dim),
+            )
+        else:
+            self.latent, self.hidden = self.S4WM.open_loop_predict(
+                self.action_input.view(self.num_envs, 1, 4),
+                self.latent.view(self.num_envs, 1, self.latent_dim),
+            )
+
         self.latent = self.latent.squeeze()
         self.hidden = self.hidden.squeeze()
         self.S4WM.reset_cache(reset_env_ids)
@@ -664,16 +673,13 @@ class AerialRobotWithObstacles(BaseTask):
             ]
             self.gym.add_lines(self.viewer, self.envs[0], 1, spehere_line, [1, 0, 0])
 
-        for line in self.traj:
-            if self.collisions[0]:
-                color = [0.9, 0.0, 0.0]
-            # elif self.timeouts[0]:
-            # color = [0.0, 0.0, 0.9]
-            else:
-                color = [0.0, 0.9, 0.0]
-            # color = [0.9, 0.0, 0.0] if self.collisions[0] else [0.0, 0.9, 0.0]
-            if not self.timeouts[0]:
-                self.gym.add_lines(self.viewer, self.envs[0], 1, line, color)
+        if self.collisions[0]:
+            color = [0.9, 0.0, 0.0]
+        else:
+            color = [0.0, 0.9, 0.0]
+        if not self.timeouts[0]:
+            self.trajs.append({"traj": self.traj, "color": color})
+            self.gym.add_lines(self.viewer, self.envs[0], 1, line, color)
 
         if self.collisions[0]:
             self.crash += 1
@@ -681,14 +687,21 @@ class AerialRobotWithObstacles(BaseTask):
             self.successful += 1
 
         if self.num_rollouts == 100:
+            for traj in self.trajs:
+                for line in traj["traj"]:
+                    self.gym.add_lines(
+                        self.viewer, self.envs[0], 1, line, traj["color"]
+                    )
+
             print("Crash", self.crash)
             print("success", self.successful)
-            time.sleep(10000)
+
+        if self.num_rollouts == 105:
+            time.sleep(1000)
 
         self.collisions[env_ids] = 0
         self.timeouts[env_ids] = 0
-        print(self.successful)
-        print(self.crash)
+
         self.traj = []
 
     def pre_physics_step(self, _actions):
@@ -773,7 +786,7 @@ class AerialRobotWithObstacles(BaseTask):
         zeros = torch.zeros((self.num_envs), device=self.device)
         self.collisions[:] = 0
         self.collisions = torch.where(
-            torch.norm(self.contact_forces, dim=1) > 0.1, ones, zeros
+            torch.norm(self.contact_forces, dim=1) > 1.0, ones, zeros
         )
 
     def dump_images(self):
