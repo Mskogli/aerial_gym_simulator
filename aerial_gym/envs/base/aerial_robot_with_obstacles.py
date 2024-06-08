@@ -521,11 +521,11 @@ class AerialRobotWithObstacles(BaseTask):
         self.reset_buf = torch.where(self.collisions > 0, self.ones, self.zeros)
         self.reset_buf = torch.where(self.timeouts > 0, self.ones, self.reset_buf)
         self.reset_buf = torch.where(
-            self.distances_to_target < 1.0, self.ones, self.reset_buf
+            self.distances_to_target < 0.25, self.ones, self.reset_buf
         )
 
         cache_resets = torch.where(
-            (self.progress_buf % 230 == 0),
+            (self.progress_buf % 250 == 0),
             self.ones,
             self.zeros,
         )
@@ -540,26 +540,27 @@ class AerialRobotWithObstacles(BaseTask):
         if len(reset_env_ids) > 0:
             self.reset_idx(reset_env_ids)
 
-        line = [
-            self.prev_root_positions[0][0].item(),
-            self.prev_root_positions[0][1].item(),
-            self.prev_root_positions[0][2].item(),
-            self.root_positions[0][0].item(),
-            self.root_positions[0][1].item(),
-            self.root_positions[0][2].item(),
-        ]
-        self.gym.add_lines(self.viewer, self.envs[0], 1, line, [1, 0, 0])
         self.render(sync_frame_time=False)
         self.render_cameras()
 
-        self.latent, self.hidden = self.S4WM.forward(
-            self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
-            self.action_input.view(self.num_envs, 1, 4),
-            self.latent.view(self.num_envs, 1, self.latent_dim),
-        )
+        if not self.progress_buf[0] % 2:
+            self.latent, self.hidden = self.S4WM.forward(
+                self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
+                self.action_input.view(self.num_envs, 1, 4),
+                self.latent.view(self.num_envs, 1, self.latent_dim),
+            )
+        else:
+            self.latent, self.hidden = self.S4WM.open_loop_predict(
+                self.action_input.view(self.num_envs, 1, 4),
+                self.latent.view(self.num_envs, 1, self.latent_dim),
+            )
+            # print(sigma_trace)
 
         self.latent = self.latent.squeeze()
         self.hidden = self.hidden.squeeze()
+        self.latent[torch.isnan(self.latent)] = 0
+        self.hidden[torch.isnan(self.hidden)] = 0
+
         self.S4WM.reset_cache(reset_env_ids)
         self.hidden[reset_env_ids] = 0
 
@@ -607,7 +608,7 @@ class AerialRobotWithObstacles(BaseTask):
             print("Crash Count: ", stats_dict["crash_sum"])
             print("Timeout Count: ", stats_dict["timeout_sum"])
 
-            if self.num_logged_episodes == 500:
+            if self.num_logged_episodes >= 500:
                 print("% Success: ", stats_dict["success_rate"])
                 print("% Crash: ", stats_dict["crash_rate"])
                 print("% Timeout: ", stats_dict["timeout_rate"])
@@ -921,7 +922,7 @@ class AerialRobotWithObstacles(BaseTask):
 
         # successful robots are those that are close to the goal
         self.successes[:] = torch.where(
-            self.distances_to_target < 1.0, self.ones, self.zeros
+            self.distances_to_target < 0.25, self.ones, self.zeros
         )
         self.success_count = torch.sum(self.successes > 0).item()
 
