@@ -198,7 +198,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [70, 200, 100]
 
     class object_asset_params(asset_state_params):
-        num_assets = 26
+        num_assets = 50
         num_dynamic_assets = 0
 
         max_position_ratio = [0.1, 0.85, 0.0]  # min position as a ratio of the bounds
