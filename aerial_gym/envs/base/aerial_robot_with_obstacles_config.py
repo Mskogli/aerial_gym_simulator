@@ -40,8 +40,8 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
 
     class viewer:
         ref_env = 0
-        pos = [0.0, -15.0, 2.5]  # [m]
-        lookat = [0, 15.0, 2.5]  # [m]
+        pos = [0.0000001, 0.0, 22.5]  # [m]
+        lookat = [0.0, 0.0, 0.0]  # [m]
 
     class sim:
         dt = 0.01
@@ -437,7 +437,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         max_position_ratio = [
             1.0,
             0.0,
-            1.0,
+            0.75,
         ]  # max position as a ratio of the bounds after offset
 
     class goal_spawning_config:
@@ -450,5 +450,5 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         max_position_ratio = [
             1.0,
             1.0,
-            1.0,
+            0.75,
         ]  # max position as a ratio of the bounds after offset
