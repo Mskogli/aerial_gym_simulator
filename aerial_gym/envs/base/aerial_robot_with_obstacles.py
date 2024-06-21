@@ -510,6 +510,11 @@ class AerialRobotWithObstacles(BaseTask):
         ]
         self.gym.add_lines(self.viewer, self.envs[0], 1, line, [1, 0, 0])
 
+        if (
+            self.progress_buf[0] % 260 == 0
+        ):  # This should be done for every env in the eval
+            self.S4WM.reset_cache(torch.tensor([0], device=self.device))
+
         self.latent, self.hidden = self.S4WM.forward(
             self.full_camera_array.view(self.num_envs, 1, 135, 240, 1),
             self.action_input.view(self.num_envs, 1, 4),
