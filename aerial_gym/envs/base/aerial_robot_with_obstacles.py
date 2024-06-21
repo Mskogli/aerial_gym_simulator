@@ -470,7 +470,6 @@ class AerialRobotWithObstacles(BaseTask):
 
     def step(self, actions):
         # step physics and render each frame
-        actions = torch.zeros_like(actions)
         self.prev_root_positions = self.root_positions.detach().clone()
         for _ in range(self.prediction_horizon):
             for i in range(self.cfg.env.num_control_steps_per_env_step):
