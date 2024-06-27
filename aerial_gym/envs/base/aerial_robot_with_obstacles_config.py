@@ -23,7 +23,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         get_privileged_obs = True  # if True the states of all entitites in the environment will be returned as privileged observations, otherwise None will be returned
         num_actions = 4
         env_spacing = 5.0  # not used with heightfields/trimeshes
-        episode_length_s = 40  # episode length in seconds
+        episode_length_s = 60  # episode length in seconds
         num_control_steps_per_env_step = (
             10  # number of control & physics steps between camera renders
         )
@@ -40,7 +40,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
 
     class viewer:
         ref_env = 0
-        pos = [0.00000001, 0.0, 25.5]  # [m]
+        pos = [-0.00000001, 0, 25.2]  # [m]
         lookat = [0.0, 0.0, 0.0]  # [m]
 
     class sim:
