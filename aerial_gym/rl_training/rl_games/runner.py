@@ -23,9 +23,7 @@ from trajectoryLogger import TrajectoryLogger
 class ExtractObsWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.logger = TrajectoryLogger(
-            "quad_depth_imgs", num_envs=128, trajectory_length=100
-        )
+        self.logger = TrajectoryLogger("dataset", num_envs=128, trajectory_length=100)
 
     def reset(self, **kwargs):
         observations, _privileged_observations = super().reset(**kwargs)

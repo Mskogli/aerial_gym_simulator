@@ -1,4 +1,3 @@
-# %%
 import numpy as np
 import h5py
 
@@ -55,30 +54,3 @@ class TrajectoryLogger:
                 self.log_buffer[env_id] = LogObject()
             elif resets[env_id]:
                 self.log_buffer[env_id] = LogObject()
-
-
-# %%
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-
-    latents = np.random.rand(2, 3, 3)
-    actions = np.array([[1, 2, 3], [4, 5, 6]]).reshape(2, 3)
-    states = np.array([[1, 2, 3], [4, 5, 6]]).reshape(2, 3)
-    resets = np.array([[1], [1]]).reshape(2, 1)
-
-    with h5py.File(
-        "/home/mathias/aerial_gym_simulator/aerial_gym/rl_training/rl_games/quad_depth_imgs",
-        "r",
-    ) as f:
-        print(f.keys())
-
-        TRAJ_NUM = 12
-
-        for i in range(75):
-            imgs = f[f"trajectory_{TRAJ_NUM}/image_{i}"][:]
-            print(f[f"trajectory_{TRAJ_NUM}/image_{i}"].attrs["actions"])
-            plt.imshow(imgs)
-            plt.show()
-
-
-# %%
