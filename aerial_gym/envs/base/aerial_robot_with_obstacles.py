@@ -755,11 +755,8 @@ class AerialRobotWithObstacles(BaseTask):
     def compute_reward(self):
         self.rew_buf[:] = compute_quadcopter_reward(
             self.distances_to_target,
-            self.prev_distances_to_target,
             self.action_input,
             self.collisions,
-            self.timeouts,
-            self.progress_buf,
         )
 
 
@@ -815,13 +812,10 @@ def exponential_reward_function(
 @torch.jit.script
 def compute_quadcopter_reward(
     distances_to_goal,
-    prev_distances_to_goal,
     action_input,
     collisions,
-    timeouts,
-    progress_buf,
 ):
-    # type: (Tensor, Tensor, Tensor, Tensor, Tensor, Tensor) -> Tensor
+    # type: (Tensor, Tensor, Tensor) -> Tensor
 
     ## The reward function set here is arbitrary and the user is encouraged to modify this as per their need to achieve collision avoidance.
     ones = torch.ones_like(collisions, device=collisions.device, dtype=torch.float32)
