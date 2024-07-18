@@ -51,6 +51,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.physics_engine = physics_engine
         self.sim_device_id = sim_device
         self.headless = headless
+        self.dynamic_assets = self.cfg.env.dynamic_assets
 
         self.enable_onboard_cameras = self.cfg.env.enable_onboard_cameras
 
@@ -676,19 +677,20 @@ class AerialRobotWithObstacles(BaseTask):
             self.forces < 0, torch.zeros_like(self.forces), self.forces
         )
 
-        dynamic_asset_forces, dynamic_asset_torques = (
-            self.env_asset_manager.compute_dyn_asset_forces(
-                self.env_asset_root_states, self.counter
+        if self.dynamic_assets:
+            dynamic_asset_forces, dynamic_asset_torques = (
+                self.env_asset_manager.compute_dyn_asset_forces(
+                    self.env_asset_root_states, self.counter
+                )
             )
-        )
 
-        self.forces[:, 5:, :][
-            :, self.env_asset_manager.dynamic_asset_ids, :
-        ] = dynamic_asset_forces
+            self.forces[:, 5:, :][
+                :, self.env_asset_manager.dynamic_asset_ids, :
+            ] = dynamic_asset_forces
 
-        self.torques[:, 5:][
-            :, self.env_asset_manager.dynamic_asset_ids
-        ] = dynamic_asset_torques
+            self.torques[:, 5:][
+                :, self.env_asset_manager.dynamic_asset_ids
+            ] = dynamic_asset_torques
 
         # apply actions
         self.gym.apply_rigid_body_force_tensors(
