@@ -31,7 +31,7 @@ params:
   config:
     env_name: quad_with_obstacles
     env_config:
-      num_envs: 4096
+      num_envs: 128
       
     name: quad_ppo
     reward_shaper:
@@ -52,7 +52,7 @@ params:
     truncate_grads: True
     e_clip: 0.2
     clip_value: False
-    num_actors: 4096
+    num_actors: 128
     horizon_length: 24
     minibatch_size: 96
     mini_epochs: 5

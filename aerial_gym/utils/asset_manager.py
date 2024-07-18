@@ -203,6 +203,7 @@ class AssetManager:
                 folder_path, asset_class.num_assets
             )
 
+
             num_dynamic_assets = asset_class.num_dynamic_assets
             prev_registered_assets = len(asset_list)
             for file_num, file_name in enumerate(file_list):
@@ -221,6 +222,7 @@ class AssetManager:
                 if num_dynamic_assets and file_num < num_dynamic_assets:
                     asset_dict["asset_options"].fix_base_link = False
 
+
                     if self.dynamic_asset_ids is None:
                         dynamic_asset_id = (
                             file_num
@@ -236,6 +238,7 @@ class AssetManager:
             if self.dynamic_asset_ids is None
             else self.dynamic_asset_ids
         )
+
         self.num_dynamic_assets = len(self.dynamic_asset_ids)
 
         # adding environment bounds to be loaded as assets
@@ -337,6 +340,7 @@ class AssetManager:
             else:
                 self.dynamic_asset_centroids = dynamic_asset_pose_tensor[:, :, :3]
 
+
     def get_env_link_count(self):
         return self.env_link_count
 
@@ -386,35 +390,5 @@ class AssetManager:
 
         forces = torch.matmul(rotation_matrices, forces.unsqueeze(-1)).squeeze(-1)
         torques = torch.zeros_like(forces)
+    
         return (forces, torques)
-
-    def _step_dyn_asset_circle_setpoint(self) -> torch.tensor:
-        circle_x = torch.sin(self.t)
-        circle_y = torch.cos(self.t)
-
-        circle_asset_centroids = self.dynamic_asset_centroids[
-            :, 0 : self.num_dynamic_assets // 3, :
-        ]
-        return (
-            torch.tensor([circle_x, circle_y, 0], device=self.device).view(-1, 1, 3)
-            + circle_asset_centroids
-        )
-
-    def _step_dyn_asset_horizontal_line_setpoint(self) -> torch.tensor:
-        line_x = torch.sin(self.t)
-        horizontal_line_asset_centroids = self.dynamic_asset_centroids[
-            :, self.num_dynamic_assets // 3 : 11, :
-        ]
-        return (
-            torch.tensor([line_x, 0, 0], device=self.device).view(-1, 1, 3)
-            + horizontal_line_asset_centroids
-        )
-
-    def _step_dyn_asset_vertical_line_setpoint(self) -> torch.tensor:
-        line_z = torch.sin(self.t)
-        vertical_line_asset_centroids = self.dynamic_asset_centroids[:, 11:12, :]
-
-        return (
-            torch.tensor([0, 0, line_z], device=self.device).view(-1, 1, 3)
-            + vertical_line_asset_centroids
-        )

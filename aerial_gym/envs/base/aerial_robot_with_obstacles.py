@@ -4,7 +4,6 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-import math
 import numpy as np
 import os
 import torch
@@ -51,11 +50,15 @@ class AerialRobotWithObstacles(BaseTask):
         self.physics_engine = physics_engine
         self.sim_device_id = sim_device
         self.headless = headless
+        self.saved_frame = False
+        self.dynamic_assets = cfg.dynamic_assets
+        self.prediction_horizon = 10
 
         self.enable_onboard_cameras = self.cfg.env.enable_onboard_cameras
 
         self.env_asset_manager = AssetManager(self.cfg, sim_device)
         self.cam_resolution = (240, 135)
+
 
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless)
         self.root_tensor = self.gym.acquire_actor_root_state_tensor(self.sim)
@@ -81,6 +84,8 @@ class AerialRobotWithObstacles(BaseTask):
         self.root_linvels = self.root_states[..., 7:10]
         self.root_angvels = self.root_states[..., 10:13]
 
+        self.prev_root_positions = torch.zeros_like(self.root_positions)
+
         self.env_asset_root_states = self.vec_root_tensor[:, 1:, :]
 
         self.privileged_obs_buf = None
@@ -95,6 +100,10 @@ class AerialRobotWithObstacles(BaseTask):
         self.collisions = torch.zeros(self.num_envs, device=self.device)
         self.timeouts = torch.zeros(self.num_envs, device=self.device)
 
+        self.goal_positions = torch.zeros(
+            self.num_envs, 3, device=self.device, dtype=torch.float32
+        )
+
         self.initial_root_states = self.root_states.clone()
         self.counter = 0
 
@@ -108,10 +117,12 @@ class AerialRobotWithObstacles(BaseTask):
         # control tensors
         self.action_input = torch.zeros(
             (self.num_envs, 4),
+
             dtype=torch.float32,
             device=self.device,
             requires_grad=False,
         )
+
         self.forces = torch.zeros(
             (self.num_envs, bodies_per_env, 3),
             dtype=torch.float32,
@@ -134,6 +145,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.env_upper_bound = torch.zeros(
             (self.num_envs, 3), dtype=torch.float32, device=self.device
         )
+
 
         # S4RL
 
@@ -242,6 +254,7 @@ class AerialRobotWithObstacles(BaseTask):
         if self.cfg.env.enable_onboard_cameras:
             self.full_camera_array = torch.zeros(
                 (self.num_envs, 135, 240), device=self.device
+
             )
 
         if self.viewer:
@@ -360,10 +373,17 @@ class AerialRobotWithObstacles(BaseTask):
                 )
                 torch_cam_tensor = gymtorch.wrap_tensor(camera_tensor)
                 self.camera_tensors.append(torch_cam_tensor)
+                print("Batman")
 
             env_asset_list = self.env_asset_manager.prepare_assets_for_simulation(
                 self.gym, self.sim
             )
+
+
+            env_asset_list = self.env_asset_manager.prepare_assets_for_simulation(
+                self.gym, self.sim
+            )
+
             asset_counter = 0
 
             # have the segmentation counter be the max defined semantic id + 1. Use this to set the semantic mask of objects that are
@@ -373,7 +393,7 @@ class AerialRobotWithObstacles(BaseTask):
                     self.segmentation_counter, int(dict_item["semantic_id"]) + 1
                 )
 
-            for dict_item in env_asset_list:
+            for i, dict_item in enumerate(env_asset_list):
                 folder_path = dict_item["asset_folder_path"]
                 filename = dict_item["asset_file_name"]
                 asset_options = dict_item["asset_options"]
@@ -440,10 +460,10 @@ class AerialRobotWithObstacles(BaseTask):
                             env_asset_handle,
                             rb_index,
                             self.segmentation_counter,
-                        )
 
                 if color is None:
                     color = np.random.randint(low=50, high=200, size=3)
+
 
                 self.gym.set_rigid_body_color(
                     env_handle,
@@ -466,7 +486,7 @@ class AerialRobotWithObstacles(BaseTask):
 
         print("\n\n\n\n\n ENVIRONMENT CREATED \n\n\n\n\n\n")
 
-    def step(self, actions):
+    def step(self, trajectory):
         # step physics and render each frame
         for _ in range(self.prediction_horizon):
             for i in range(self.cfg.env.num_control_steps_per_env_step):
@@ -487,6 +507,9 @@ class AerialRobotWithObstacles(BaseTask):
         self.reset_buf = torch.where(self.collisions > 0, self.ones, self.zeros)
         self.reset_buf = torch.where(self.timeouts > 0, self.ones, self.reset_buf)
 
+        self.extras["resets"] = (
+            self.reset_buf
+        )  # Record resets in order to facilitate data logging
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
             self.reset_idx(reset_env_ids)
@@ -607,7 +630,7 @@ class AerialRobotWithObstacles(BaseTask):
         self.timeouts[env_ids] = 0
         self.hidden[env_ids] = 0
 
-    def pre_physics_step(self, _actions):
+    def pre_physics_step(self, actions):
         # resets
         # resets
         self.counter += 1
@@ -616,11 +639,6 @@ class AerialRobotWithObstacles(BaseTask):
         actions = tensor_clamp(
             actions, self.action_lower_limits, self.action_upper_limits
         )
-        self.action_input[:] = actions
-
-        # clear actions for reset envs
-        self.forces[:] = 0.0
-        self.torques[:, :] = 0.0
 
         output_thrusts_mass_normalized, output_torques_inertia_normalized = (
             self.controller(self.root_states, self.action_input)
@@ -662,6 +680,8 @@ class AerialRobotWithObstacles(BaseTask):
         self.gym.render_all_camera_sensors(self.sim)
         self.gym.start_access_image_tensors(self.sim)
         self.dump_images()
+        self._process_depth_images()
+        self._compute_latent_representation()
         self.gym.end_access_image_tensors(self.sim)
         self._process_depth_images()
         return
@@ -688,6 +708,7 @@ class AerialRobotWithObstacles(BaseTask):
         ones = torch.ones((self.num_envs), device=self.device)
         zeros = torch.zeros((self.num_envs), device=self.device)
         self.collisions[:] = 0
+
         self.collisions = torch.where(
             torch.norm(self.contact_forces, dim=1) > 0.1, ones, zeros
         )
@@ -752,6 +773,11 @@ class AerialRobotWithObstacles(BaseTask):
 
         return self.obs_buf
 
+    # Call into the torch wrapper, step the world model, compute the current latent state and hidden state
+    def step_world_model(self):
+        pass
+
+    # Compute rewards and environment resets
     def compute_reward(self):
         self.rew_buf[:] = compute_quadcopter_reward(
             self.distances_to_target,
@@ -761,6 +787,7 @@ class AerialRobotWithObstacles(BaseTask):
             self.timeouts,
             self.progress_buf,
         )
+
 
 
 ###=========================jit functions=========================###

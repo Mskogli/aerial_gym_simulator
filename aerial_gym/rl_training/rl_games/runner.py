@@ -2,6 +2,7 @@ import numpy as np
 import os
 import yaml
 
+from trajectoryLogger import TrajectoryLogger
 
 import isaacgym
 
@@ -23,6 +24,7 @@ os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 class ExtractObsWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
+        self.logger = TrajectoryLogger("trajectories.jsonl", 1, 100)
 
     def reset(self, **kwargs):
         observations, _privileged_observations = super().reset(**kwargs)
