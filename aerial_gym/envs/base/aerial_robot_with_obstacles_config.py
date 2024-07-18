@@ -16,15 +16,15 @@ WALL_SEMANTIC_ID = 8
 
 
 class AerialRobotWithObstaclesCfg(BaseConfig):
-    seed = 2
+
+    seed = 1
 
     class env:
         num_envs = 64
-        num_observations = 13
-        get_privileged_obs = True  # if True the states of all entitites in the environmsent will be returned as privileged observations, otherwise None will be returned
+        get_privileged_obs = True  # if True the states of all entitites in the environment will be returned as privileged observations, otherwise None will be returned
         num_actions = 4
         env_spacing = 5.0  # not used with heightfields/trimeshes
-        episode_length_s = 4  # episode length in seconds
+        episode_length_s = 20  # episode length in seconds
         num_control_steps_per_env_step = (
             10  # number of control & physics steps between camera renders
         )
@@ -32,6 +32,13 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         reset_on_collision = True  # reset environment when contact force on quadrotor is above a threshold
         create_ground_plane = True  # create a ground plane
         dynamic_assets = True
+
+        # RL stuff
+        prediction_horizon = 1
+        latent_dim = 128
+        hidden_dim = 512
+        num_observations = 13 + latent_dim + hidden_dim
+
 
     class viewer:
         ref_env = 0
@@ -131,7 +138,8 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
 
     class thin_asset_params(asset_state_params):
         num_assets = 10
-        num_dynamic = 2
+        num_dynamic_assets = 0
+
 
         collision_mask = 1  # objects with the same collision mask will not collide
 
@@ -143,8 +151,10 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
             -1000.0,
             -1000.0,
         ]  # if > -900, use this value instead of randomizing   the ratios
+
         min_euler_angles = [-np.pi, -np.pi, -np.pi]  # min euler angles
         max_euler_angles = [np.pi, np.pi, np.pi]  # max euler angles
+
 
         specified_euler_angle = [
             -1000.0,
@@ -162,8 +172,9 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [170, 66, 66]
 
     class tree_asset_params(asset_state_params):
-        num_assets = 1
-        num_dynamic = 1
+        num_assets = 10
+        num_dynamic_assets = 0
+
 
         collision_mask = 1  # objects with the same collision mask will not collide
 
@@ -195,8 +206,9 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         color = [70, 200, 100]
 
     class object_asset_params(asset_state_params):
-        num_assets = 24
-        num_dynamic = 12
+        num_assets = 40
+        num_dynamic_assets = 15
+
 
         max_position_ratio = [0.95, 0.95, 0.95]  # min position as a ratio of the bounds
         min_position_ratio = [0.05, 0.05, 0.05]  # max position as a ratio of the bounds
@@ -268,6 +280,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
 
         min_euler_angles = [0.0, 0.0, 0.0]  # min euler angles
         max_euler_angles = [0.0, 0.0, 0.0]  # max euler angles
+
 
         specified_euler_angle = [
             -1000.0,
@@ -356,6 +369,7 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         min_euler_angles = [0.0, 0.0, 0.0]  # min euler angles
         max_euler_angles = [0.0, 0.0, 0.0]  # max euler angles
 
+
         specified_euler_angle = [
             -1000.0,
             -1000.0,
@@ -403,11 +417,11 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         include_asset_type = {"thin": False, "trees": False, "objects": True}
 
         include_env_bound_type = {
-            "front_wall": False,
-            "left_wall": False,
+            "front_wall": True,
+            "left_wall": True,
             "top_wall": False,
-            "back_wall": False,
-            "right_wall": False,
+            "back_wall": True,
+            "right_wall": True,
             "bottom_wall": False,
         }
 
@@ -415,3 +429,29 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
         env_lower_bound_max = [-5.0, -5.0, 0.0]  # lower bound for the environment space
         env_upper_bound_min = [5.0, 5.0, 5.0]  # upper bound for the environment space
         env_upper_bound_max = [5.0, 5.0, 5.0]  # upper bound for the environment space
+
+    class robot_spawning_config:
+        offset = [0.5, 0.5, 0.5]  # offset from each wall
+        min_position_ratio = [
+            0.1,
+            0.1,
+            0.1,
+        ]  # min position as a ratio of the bounds after offset
+        max_position_ratio = [
+            0.9,
+            0.9,
+            0.9,
+        ]  # max position as a ratio of the bounds after offset
+
+    class goal_spawning_config:
+        offset = [0.3, 0.3, 0.5]  # offset from each wall
+        min_position_ratio = [
+            0.0,
+            0.0,
+            0.0,
+        ]  # min position as a ratio of the bounds after offset
+        max_position_ratio = [
+            1.0,
+            1.0,
+            1.0,
+        ]  # max position as a ratio of the bounds after offset

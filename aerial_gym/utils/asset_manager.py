@@ -88,8 +88,8 @@ class AssetManager:
         }
 
         # Dynamic assets
-        self.Kp = 2.0
-        self.Kd = 1.5
+        self.Kp = 2000
+        self.Kd = 45
 
         self.load_asset_tensors()
         self.randomize_pose()
@@ -203,9 +203,9 @@ class AssetManager:
                 folder_path, asset_class.num_assets
             )
 
-            num_dynamic_assets = asset_class.num_dynamic
-            prev_registered_assets = len(asset_list)
 
+            num_dynamic_assets = asset_class.num_dynamic_assets
+            prev_registered_assets = len(asset_list)
             for file_num, file_name in enumerate(file_list):
                 asset_dict = {
                     "asset_folder_path": folder_path,
@@ -221,7 +221,7 @@ class AssetManager:
 
                 if num_dynamic_assets and file_num < num_dynamic_assets:
                     asset_dict["asset_options"].fix_base_link = False
-                    asset_dict["asset_options"].disable_gravity = False
+
 
                     if self.dynamic_asset_ids is None:
                         dynamic_asset_id = (
@@ -238,7 +238,7 @@ class AssetManager:
             if self.dynamic_asset_ids is None
             else self.dynamic_asset_ids
         )
-        print("Dyn asset ids", self.dynamic_asset_ids)
+
         self.num_dynamic_assets = len(self.dynamic_asset_ids)
 
         # adding environment bounds to be loaded as assets
@@ -328,11 +328,18 @@ class AssetManager:
             self.asset_pose_tensor,
         )
 
-        self.dynamic_asset_centroids = self.asset_pose_tensor[
-            :, self.dynamic_asset_ids, :3
-        ]
+        if self.dynamic_asset_ids is not None:
+            dynamic_asset_pose_tensor = self.asset_pose_tensor[
+                :, self.dynamic_asset_ids, :
+            ]
 
-        return
+            if self.dynamic_asset_centroids is not None:
+                self.dynamic_asset_centroids[reset_envs, :] = dynamic_asset_pose_tensor[
+                    reset_envs, :, :3
+                ]
+            else:
+                self.dynamic_asset_centroids = dynamic_asset_pose_tensor[:, :, :3]
+
 
     def get_env_link_count(self):
         return self.env_link_count
@@ -343,54 +350,45 @@ class AssetManager:
     def compute_dyn_asset_forces(
         self, states: torch.tensor, counter: float
     ) -> Tuple[torch.tensor, ...]:  # 2 Tuple
+        n = self.num_dynamic_assets // 3
+        self.t = torch.tensor([counter / 150.0], device=self.device)
 
-        self.t = torch.tensor([counter / 100.0], device=self.device)
+        sin, cos = torch.sin(self.t), torch.cos(self.t)
 
-        circle_setpoints = self._step_dyn_asset_circle_setpoint()
-        hline_setpoints = self._step_dyn_asset_horizontal_line_setpoint()
-        vline_setpoints = self._step_dyn_asset_vertical_line_setpoint()
+        circle_asset_centroids = self.dynamic_asset_centroids[:, 0:n, :]
+        circle_setpoints = (
+            torch.tensor([sin, cos, 0], device=self.device).view(-1, 1, 3)
+            + circle_asset_centroids
+        )
+
+        hline_asset_centroids = self.dynamic_asset_centroids[:, n : 2 * n, :]
+        hline_setpoints = (
+            torch.tensor([sin, 0, 0], device=self.device).view(-1, 1, 3)
+            + hline_asset_centroids
+        )
+
+        vline_asset_centroids = self.dynamic_asset_centroids[:, 2 * n : 3 * n, :]
+        vline_setpoints = (
+            torch.tensor([0, 0, sin], device=self.device).view(-1, 1, 3)
+            + vline_asset_centroids
+        )
 
         setpoints = torch.cat(
             (circle_setpoints, hline_setpoints, vline_setpoints), dim=1
         )
 
         dyn_asset_states = states[:, self.dynamic_asset_ids, :]
-        position_errors = setpoints - dyn_asset_states[:, self.dynamic_asset_ids, 0:3]
+
+        position_errors = setpoints - dyn_asset_states[:, :, 0:3]
         velocity_errors = -dyn_asset_states[:, :, 7:10]
+
         rotation_matrices = p3d_transforms.quaternion_to_matrix(
             dyn_asset_states[..., [6, 3, 4, 5]]
         ).transpose(-2, -1)
 
         forces = self.Kp * position_errors + self.Kd * velocity_errors
-        forces[:, :, -1] += 9.81
 
         forces = torch.matmul(rotation_matrices, forces.unsqueeze(-1)).squeeze(-1)
-        torques = torch.ones_like(forces) * torch.sin(self.t) * 0.0
+        torques = torch.zeros_like(forces)
+    
         return (forces, torques)
-
-    def _step_dyn_asset_circle_setpoint(self) -> torch.tensor:
-        circle_x = torch.sin(self.t)
-        circle_y = torch.cos(self.t)
-
-        circle_asset_centroids = self.dynamic_asset_centroids[:, 0:4, :]
-        return (
-            torch.tensor([circle_x, circle_y, 0], device=self.device).view(-1, 1, 3)
-            + circle_asset_centroids
-        )
-
-    def _step_dyn_asset_horizontal_line_setpoint(self) -> torch.tensor:
-        line_x = torch.sin(self.t)
-        horizontal_line_asset_centroids = self.dynamic_asset_centroids[:, 4:8, :]
-        return (
-            torch.tensor([line_x, 0, 0], device=self.device).view(-1, 1, 3)
-            + horizontal_line_asset_centroids
-        )
-
-    def _step_dyn_asset_vertical_line_setpoint(self) -> torch.tensor:
-        line_z = torch.sin(self.t)
-        vertical_line_asset_centroids = self.dynamic_asset_centroids[:, 8:12, :]
-
-        return (
-            torch.tensor([0, 0, line_z], device=self.device).view(-1, 1, 3)
-            + vertical_line_asset_centroids
-        )
