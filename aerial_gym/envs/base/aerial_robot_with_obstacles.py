@@ -143,18 +143,15 @@ class AerialRobotWithObstacles(BaseTask):
         self.hidden_dim = cfg.env.hidden_dim
         self.prediction_horizon = cfg.env.prediction_horizon
 
-        os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-
         self.S4WM = S4WMTorchWrapper(
             self.num_envs,
             "/home/mathias/dev/rl_checkpoints/gaussian_128",
-            d_latent=self.latent_dim * 2,
-            d_pssm_blocks=self.hidden_dim,
-            num_pssm_blocks=3,
-            d_ssm=128,
+            latent_dim=self.latent_dim * 2,
+            S4_block_dim=self.hidden_dim,
+            num_S4_blocks=3,
+            ssm_dim=128,
             sample_mean=True,
         )
-
         self.latent = torch.zeros(
             (self.num_envs, self.latent_dim),
             dtype=torch.float32,
