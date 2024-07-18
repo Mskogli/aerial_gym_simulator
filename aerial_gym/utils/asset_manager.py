@@ -387,34 +387,3 @@ class AssetManager:
         forces = torch.matmul(rotation_matrices, forces.unsqueeze(-1)).squeeze(-1)
         torques = torch.zeros_like(forces)
         return (forces, torques)
-
-    def _step_dyn_asset_circle_setpoint(self) -> torch.tensor:
-        circle_x = torch.sin(self.t)
-        circle_y = torch.cos(self.t)
-
-        circle_asset_centroids = self.dynamic_asset_centroids[
-            :, 0 : self.num_dynamic_assets // 3, :
-        ]
-        return (
-            torch.tensor([circle_x, circle_y, 0], device=self.device).view(-1, 1, 3)
-            + circle_asset_centroids
-        )
-
-    def _step_dyn_asset_horizontal_line_setpoint(self) -> torch.tensor:
-        line_x = torch.sin(self.t)
-        horizontal_line_asset_centroids = self.dynamic_asset_centroids[
-            :, self.num_dynamic_assets // 3 : 11, :
-        ]
-        return (
-            torch.tensor([line_x, 0, 0], device=self.device).view(-1, 1, 3)
-            + horizontal_line_asset_centroids
-        )
-
-    def _step_dyn_asset_vertical_line_setpoint(self) -> torch.tensor:
-        line_z = torch.sin(self.t)
-        vertical_line_asset_centroids = self.dynamic_asset_centroids[:, 11:12, :]
-
-        return (
-            torch.tensor([0, 0, line_z], device=self.device).view(-1, 1, 3)
-            + vertical_line_asset_centroids
-        )
