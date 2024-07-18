@@ -40,8 +40,8 @@ class AerialRobotWithObstaclesCfg(BaseConfig):
 
     class viewer:
         ref_env = 0
-        pos = [-5, -5, 4]  # [m]
-        lookat = [0, 0, 0]  # [m]
+        pos = [-0.00000001, 0, 12.5]  # [m]
+        lookat = [0.0, 0.0, 0.0]  # [m]
 
     class sim:
         dt = 0.01

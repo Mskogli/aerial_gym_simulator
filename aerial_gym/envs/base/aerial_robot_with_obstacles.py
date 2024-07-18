@@ -25,7 +25,6 @@ from aerial_gym.utils.asset_manager import AssetManager
 
 from aerial_gym.utils.helpers import asset_class_to_AssetOptions
 
-import time
 from s4wm.nn.s4_wm import S4WMTorchWrapper
 
 
